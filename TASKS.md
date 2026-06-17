@@ -82,29 +82,32 @@ View/Form/Admin에서 StockTransaction 직접 create/save
 
 ## 3. 작업 순서 개요
 
+진행 상태: **TASK 00 ~ 21 전부 완료.** 자동 테스트 147건 PostgreSQL 통과.
+(상태 표기는 v0.1 구현 완료 시점 기준)
+
 ```text
-TASK 00. 구현 전 전역 규칙 확인
-TASK 01. 프로젝트 초기 설정
-TASK 02. core.Department + accounts.User + AUTH_USER_MODEL
-TASK 03. PostgreSQL 테스트 환경 / 기본 fixture
-TASK 04. inventory 마스터 모델: Supplier / Item / ManagedItem
-TASK 05. StockTransaction 모델 / DB 제약조건
-TASK 06. selector 함수
-TASK 07. permission / exception
-TASK 08. service 공통 구조
-TASK 09. 입고 / 출고 service
-TASK 10. 초기재고 / 실사조정 service
-TASK 11. 승인 / 반려 / 철회 service
-TASK 12. 취소 / 일괄 승인 service
-TASK 13. Form 구현
-TASK 14. 기본 layout / login / dashboard
-TASK 15. 조회 화면
-TASK 16. 생성 화면
-TASK 17. 승인 / 취소 상태 변경 화면
-TASK 18. Django Admin 설정
-TASK 19. 전체 테스트 / 회귀 테스트 보강
-TASK 20. 수동 점검 체크리스트
-TASK 21. 문서 정리
+[x] TASK 00. 구현 전 전역 규칙 확인
+[x] TASK 01. 프로젝트 초기 설정
+[x] TASK 02. core.Department + accounts.User + AUTH_USER_MODEL
+[x] TASK 03. PostgreSQL 테스트 환경 / 기본 fixture
+[x] TASK 04. inventory 마스터 모델: Supplier / Item / ManagedItem
+[x] TASK 05. StockTransaction 모델 / DB 제약조건
+[x] TASK 06. selector 함수
+[x] TASK 07. permission / exception
+[x] TASK 08. service 공통 구조
+[x] TASK 09. 입고 / 출고 service
+[x] TASK 10. 초기재고 / 실사조정 service
+[x] TASK 11. 승인 / 반려 / 철회 service
+[x] TASK 12. 취소 / 일괄 승인 service
+[x] TASK 13. Form 구현
+[x] TASK 14. 기본 layout / login / dashboard
+[x] TASK 15. 조회 화면
+[x] TASK 16. 생성 화면
+[x] TASK 17. 승인 / 취소 상태 변경 화면
+[x] TASK 18. Django Admin 설정
+[x] TASK 19. 전체 테스트 / 회귀 테스트 보강
+[x] TASK 20. 수동 점검 체크리스트 (MANUAL_QA_CHECKLIST.md)
+[x] TASK 21. 문서 정리 (README / OPERATIONS_SETUP)
 ```
 
 ---
