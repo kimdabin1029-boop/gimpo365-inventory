@@ -34,11 +34,11 @@
       <td>{{ t.memo }}</td>
       <td>{{ t.cancel_reason }}</td>
       <td>
-        {# 취소 버튼: can_cancel_transaction == True 인 일반 거래에만 표시.
+        {# 취소: can_cancel_transaction == True 인 일반 거래에만 표시.
            INITIAL_COUNT / ADJUSTMENT 는 can_cancel 이 False 이므로 표시되지 않는다.
-           실제 cancel URL 연결은 TASK 17 에서 추가한다. #}
+           링크는 GET 확인 화면으로만 이동하며, 실제 취소는 그 화면의 POST 에서 수행한다. #}
         {% if t.can_cancel %}
-          <button class="cancel-action" id="cancel-{{ t.pk }}" type="button">취소</button>
+          <a class="cancel-action" id="cancel-{{ t.pk }}" href="{% url 'inventory:cancel' t.pk %}">취소</a>
         {% else %}
           -
         {% endif %}

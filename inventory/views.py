@@ -1,6 +1,8 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.shortcuts import render
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 from django.views.generic import ListView, TemplateView
@@ -9,12 +11,19 @@ from accounts.permissions import is_manager_or_above
 from inventory.exceptions import InventoryError
 from inventory.forms import (
     AdjustmentRequestForm,
+    ApproveTransactionForm,
+    BulkApproveInitialCountsForm,
+    CancelTransactionForm,
     InitialCountForm,
+    PendingTransactionFilterForm,
+    RejectTransactionForm,
     StockFilterForm,
     StockInForm,
     StockOutForm,
     TransactionFilterForm,
+    WithdrawPendingTransactionForm,
 )
+from inventory.models import StockTransaction
 from inventory.permissions import can_cancel_transaction
 from inventory.selectors import (
     get_low_stock_managed_items,
@@ -23,10 +32,15 @@ from inventory.selectors import (
     get_transactions,
 )
 from inventory.services import (
+    approve_transaction,
+    bulk_approve_initial_counts,
+    cancel_transaction,
     create_stock_in,
     create_stock_out,
+    reject_transaction,
     request_adjustment,
     request_initial_count,
+    withdraw_pending_transaction,
 )
 
 
@@ -270,3 +284,183 @@ class InitialCountRequestView(_ServiceCreateView):
             occurred_at=cd.get("occurred_at"),
             memo=cd.get("memo", ""),
         )
+
+
+# ---------------------------------------------------------------------------
+# 상태 변경 화면 (TASK 17)
+# ---------------------------------------------------------------------------
+class ManagerRequiredMixin(LoginRequiredMixin):
+    """MANAGER 이상만 접근 허용. 비로그인은 로그인으로 redirect, 그 외엔 403."""
+
+    def dispatch(self, request, *args, **kwargs):
+        user = request.user
+        if user.is_authenticated and not is_manager_or_above(user):
+            raise PermissionDenied("MANAGER 이상만 접근할 수 있습니다.")
+        return super().dispatch(request, *args, **kwargs)
+
+
+class PendingTransactionListView(ManagerRequiredMixin, ListView):
+    """승인 큐: PENDING INITIAL_COUNT / ADJUSTMENT. (PRODUCT_SPEC §10.12)"""
+
+    template_name = "inventory/pending_list.html"
+    context_object_name = "transactions"
+    paginate_by = 50
+
+    def get_queryset(self):
+        self._form = PendingTransactionFilterForm(
+            self.request.GET or None, user=self.request.user
+        )
+        filters = {}
+        if self._form.is_valid():
+            cd = self._form.cleaned_data
+            if cd.get("department"):
+                filters["department"] = cd["department"]
+            if cd.get("transaction_type"):
+                filters["transaction_type"] = cd["transaction_type"]
+        return get_pending_transactions(self.request.user, filters)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["filter_form"] = self._form
+        ctx["bulk_form"] = BulkApproveInitialCountsForm(user=self.request.user)
+        return ctx
+
+
+class _TransactionActionView(LoginRequiredMixin, View):
+    """단일 거래 상태 변경 공통 View.
+
+    - GET: 확인 Form 렌더링만 (상태 변경 없음)
+    - POST: form 검증 후 service 함수 호출 (상태 변경)
+    - GET/POST 양쪽에서 check_permission 으로 권한 재검사
+    - 상태 변경은 service 함수만 수행 (tx.status 직접 변경 / 직접 create 금지)
+    """
+
+    form_class = None
+    template_name = "inventory/confirm_action.html"
+    page_title = ""
+    success_message = ""
+    redirect_url_name = "inventory:pending_list"
+
+    def get_object(self):
+        return get_object_or_404(StockTransaction, pk=self.kwargs["pk"])
+
+    def check_permission(self, user, tx):
+        raise NotImplementedError
+
+    def _render(self, tx, form):
+        return render(
+            self.request,
+            self.template_name,
+            {
+                "tx": tx,
+                "form": form,
+                "page_title": self.page_title,
+                "action_url": self.request.path,
+            },
+        )
+
+    def get(self, request, *args, **kwargs):
+        tx = self.get_object()
+        self.check_permission(request.user, tx)  # GET 권한 재검사
+        return self._render(tx, self.form_class())
+
+    def post(self, request, *args, **kwargs):
+        tx = self.get_object()
+        self.check_permission(request.user, tx)  # POST 권한 재검사
+        form = self.form_class(request.POST)
+        if not form.is_valid():
+            return self._render(tx, form)
+        try:
+            self.perform(request.user, tx, form.cleaned_data)
+        except InventoryError as exc:
+            messages.error(request, str(exc))
+            return self._render(tx, form)
+        messages.success(request, self.success_message)
+        return redirect(reverse(self.redirect_url_name))
+
+    def perform(self, user, tx, cd):
+        raise NotImplementedError
+
+
+class ApproveTransactionView(_TransactionActionView):
+    form_class = ApproveTransactionForm
+    page_title = "거래 승인"
+    success_message = "거래를 승인했습니다."
+
+    def check_permission(self, user, tx):
+        if not is_manager_or_above(user):
+            raise PermissionDenied("승인 권한이 없습니다.")
+
+    def perform(self, user, tx, cd):
+        approve_transaction(
+            user=user, transaction_obj=tx, review_note=cd.get("review_note", "")
+        )
+
+
+class RejectTransactionView(_TransactionActionView):
+    form_class = RejectTransactionForm
+    page_title = "거래 반려"
+    success_message = "거래를 반려했습니다."
+
+    def check_permission(self, user, tx):
+        if not is_manager_or_above(user):
+            raise PermissionDenied("반려 권한이 없습니다.")
+
+    def perform(self, user, tx, cd):
+        reject_transaction(
+            user=user, transaction_obj=tx, review_note=cd["review_note"]
+        )
+
+
+class WithdrawPendingTransactionView(_TransactionActionView):
+    form_class = WithdrawPendingTransactionForm
+    page_title = "PENDING 거래 철회"
+    success_message = "거래를 철회했습니다."
+
+    def check_permission(self, user, tx):
+        if not (tx.created_by_id == user.id or is_manager_or_above(user)):
+            raise PermissionDenied("철회 권한이 없습니다.")
+
+    def perform(self, user, tx, cd):
+        withdraw_pending_transaction(
+            user=user, transaction_obj=tx, cancel_reason=cd["cancel_reason"]
+        )
+
+
+class CancelTransactionView(_TransactionActionView):
+    form_class = CancelTransactionForm
+    page_title = "거래 취소"
+    success_message = "거래를 취소했습니다."
+    redirect_url_name = "inventory:transaction_list"
+
+    def check_permission(self, user, tx):
+        # 권한 + 상태/유형 조건을 모두 포함 (can_cancel_transaction)
+        if not can_cancel_transaction(user, tx):
+            raise PermissionDenied("해당 거래를 취소할 권한이 없습니다.")
+
+    def perform(self, user, tx, cd):
+        cancel_transaction(
+            user=user, transaction_obj=tx, cancel_reason=cd["cancel_reason"]
+        )
+
+
+class BulkApproveInitialCountsView(ManagerRequiredMixin, View):
+    """초기재고 일괄 승인. POST 전용. (PRODUCT_SPEC §10.13)"""
+
+    def get(self, request, *args, **kwargs):
+        # GET 으로는 상태 변경하지 않는다 → 승인 큐로 돌려보낸다.
+        return redirect(reverse("inventory:pending_list"))
+
+    def post(self, request, *args, **kwargs):
+        form = BulkApproveInitialCountsForm(request.POST, user=request.user)
+        if not form.is_valid():
+            messages.error(request, "선택된 초기재고가 없습니다.")
+            return redirect(reverse("inventory:pending_list"))
+        ids = [tx.pk for tx in form.cleaned_data["selected"]]
+        result = bulk_approve_initial_counts(user=request.user, transaction_ids=ids)
+        messages.success(
+            request,
+            f"승인 완료: {len(result['approved'])}건, "
+            f"승인 제외: {len(result['skipped'])}건",
+        )
+        return redirect(reverse("inventory:pending_list"))

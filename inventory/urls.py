@@ -7,13 +7,19 @@ from django.urls import path
 
 from inventory.views import (
     AdjustmentRequestView,
+    ApproveTransactionView,
+    BulkApproveInitialCountsView,
+    CancelTransactionView,
     InitialCountRequestView,
     InventoryDashboardView,
     LowStockListView,
+    PendingTransactionListView,
+    RejectTransactionView,
     StockInCreateView,
     StockListView,
     StockOutCreateView,
     TransactionListView,
+    WithdrawPendingTransactionView,
 )
 
 app_name = "inventory"
@@ -31,5 +37,24 @@ urlpatterns = [
         "initial-count/new/",
         InitialCountRequestView.as_view(),
         name="initial_count_new",
+    ),
+    # 상태 변경 화면 (TASK 17)
+    path("pending/", PendingTransactionListView.as_view(), name="pending_list"),
+    path("pending/<int:pk>/approve/", ApproveTransactionView.as_view(), name="approve"),
+    path("pending/<int:pk>/reject/", RejectTransactionView.as_view(), name="reject"),
+    path(
+        "pending/<int:pk>/withdraw/",
+        WithdrawPendingTransactionView.as_view(),
+        name="withdraw",
+    ),
+    path(
+        "transactions/<int:pk>/cancel/",
+        CancelTransactionView.as_view(),
+        name="cancel",
+    ),
+    path(
+        "initial-counts/bulk-approve/",
+        BulkApproveInitialCountsView.as_view(),
+        name="bulk_approve",
     ),
 ]

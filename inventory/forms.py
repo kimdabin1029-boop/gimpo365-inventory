@@ -321,3 +321,11 @@ class PendingTransactionFilterForm(forms.Form):
         ],
         required=False,
     )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user is not None and not has_role_at_least(user, Role.MANAGER):
+            dept_id = getattr(user, "department_id", None)
+            self.fields["department"].queryset = Department.objects.filter(
+                pk=dept_id
+            )

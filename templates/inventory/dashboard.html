@@ -23,8 +23,9 @@
     <li><a href="{% url 'inventory:stock_list' %}">현재고 조회</a></li>
     <li><a href="{% url 'inventory:low_stock' %}">최소재고 이하 품목</a></li>
     <li><a href="{% url 'inventory:transaction_list' %}">거래 이력</a></li>
+    {% if is_manager %}
+      <li><a href="{% url 'inventory:pending_list' %}">승인 대기 큐</a></li>
+    {% endif %}
   </ul>
 </section>
-
-{# 승인/취소 등 상태변경 화면 링크는 TASK 17 에서 추가한다. #}
 {% endblock %}

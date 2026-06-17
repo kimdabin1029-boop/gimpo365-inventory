@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}승인 대기 큐 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>승인 대기 큐</h1>
+
+<form method="get" class="filter-form">
+  {{ filter_form.as_p }}
+  <button type="submit">조회</button>
+</form>
+
+<section class="bulk-approve">
+  <h2>초기재고 일괄 승인</h2>
+  <form method="post" action="{% url 'inventory:bulk_approve' %}">
+    {% csrf_token %}
+    {{ bulk_form.as_p }}
+    <button type="submit">선택 일괄 승인</button>
+  </form>
+</section>
+
+<table class="pending-table">
+  <thead>
+    <tr>
+      <th>번호</th><th>부서</th><th>품목명</th><th>거래유형</th><th>요청자</th>
+      <th>시스템 기준 수량</th><th>입력 수량</th><th>증감 수량</th><th>작업</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in transactions %}
+    <tr>
+      <td>{{ t.pk }}</td>
+      <td>{{ t.managed_item.department.name }}</td>
+      <td>{{ t.managed_item.item.name }}</td>
+      <td>{{ t.get_transaction_type_display }}</td>
+      <td>{{ t.created_by }}</td>
+      <td>{{ t.expected_quantity|default:"-" }}</td>
+      <td>{{ t.quantity_input }}</td>
+      <td>{{ t.quantity_delta }}</td>
+      <td>
+        <a href="{% url 'inventory:approve' t.pk %}">승인</a>
+        <a href="{% url 'inventory:reject' t.pk %}">반려</a>
+        <a href="{% url 'inventory:withdraw' t.pk %}">철회</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="9">대기 중인 거래가 없습니다.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
