@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}거래 이력 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>거래 이력</h1>
+
+<form method="get" class="filter-form">
+  {{ filter_form.as_p }}
+  <button type="submit">조회</button>
+</form>
+
+<table class="transaction-table">
+  <thead>
+    <tr>
+      <th>발생일시</th><th>입력일시</th><th>부서</th><th>품목명</th><th>거래유형</th>
+      <th>상태</th><th>수량</th><th>증감값</th><th>입력자</th><th>승인자</th>
+      <th>취소자</th><th>공급업체</th><th>메모</th><th>취소 사유</th><th>취소</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in transactions %}
+    <tr>
+      <td>{{ t.occurred_at|date:"Y-m-d H:i" }}</td>
+      <td>{{ t.created_at|date:"Y-m-d H:i" }}</td>
+      <td>{{ t.managed_item.department.name }}</td>
+      <td>{{ t.managed_item.item.name }}</td>
+      <td>{{ t.get_transaction_type_display }}</td>
+      <td>{{ t.get_status_display }}</td>
+      <td>{{ t.quantity_input }}</td>
+      <td>{{ t.quantity_delta }}</td>
+      <td>{{ t.created_by }}</td>
+      <td>{{ t.approved_by|default:"-" }}</td>
+      <td>{{ t.canceled_by|default:"-" }}</td>
+      <td>{{ t.supplier.name|default:"-" }}</td>
+      <td>{{ t.memo }}</td>
+      <td>{{ t.cancel_reason }}</td>
+      <td>
+        {# 취소 버튼: can_cancel_transaction == True 인 일반 거래에만 표시.
+           INITIAL_COUNT / ADJUSTMENT 는 can_cancel 이 False 이므로 표시되지 않는다.
+           실제 cancel URL 연결은 TASK 17 에서 추가한다. #}
+        {% if t.can_cancel %}
+          <button class="cancel-action" id="cancel-{{ t.pk }}" type="button">취소</button>
+        {% else %}
+          -
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="15">거래 내역이 없습니다.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
