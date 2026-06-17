@@ -28,7 +28,11 @@ from inventory.models import (
     TransactionStatus,
     TransactionType,
 )
-from inventory.permissions import can_access_managed_item
+from inventory.permissions import (
+    CANCELABLE_TRANSACTION_TYPES,
+    can_access_managed_item,
+    can_cancel_transaction,
+)
 from inventory.selectors import get_current_stock, has_approved_initial_count
 
 
@@ -407,3 +411,117 @@ def withdraw_pending_transaction(*, user, transaction_obj, cancel_reason):
         ]
     )
     return tx
+
+
+# ---------------------------------------------------------------------------
+# 취소 / 일괄 승인 service (TASK 12)
+# ---------------------------------------------------------------------------
+@transaction.atomic
+def cancel_transaction(*, user, transaction_obj, cancel_reason):
+    """APPROVED 일반 거래 취소. (TECH_SPEC §11 / PRODUCT_SPEC §6.1~6.5)
+
+    - APPROVED 일반 거래(IN / OUT 계열)만 취소 가능
+    - INITIAL_COUNT / ADJUSTMENT 는 취소 불가
+    - 권한: can_cancel_transaction (STAFF 본인·당일 / TL 부서·당일 / MANAGER·ADMIN 전체)
+    - cancel_reason 필수
+    - 취소 후 현재고 음수 방지
+    - canceled_by / canceled_at 기록
+    """
+    tx = _lock_transaction(transaction_obj)
+
+    # 상태 / 유형 검증 (INITIAL_COUNT / ADJUSTMENT, 비-APPROVED 차단)
+    if tx.status != TransactionStatus.APPROVED:
+        raise InvalidTransactionStateError(
+            "APPROVED 상태의 거래만 취소할 수 있습니다."
+        )
+    if tx.transaction_type not in CANCELABLE_TRANSACTION_TYPES:
+        raise InvalidTransactionStateError(
+            "INITIAL_COUNT / ADJUSTMENT 거래는 취소할 수 없습니다."
+        )
+
+    # 권한 검증
+    if not can_cancel_transaction(user, tx):
+        raise PermissionDeniedError("해당 거래를 취소할 권한이 없습니다.")
+
+    if not cancel_reason or not str(cancel_reason).strip():
+        raise InventoryError("취소 사유(cancel_reason)는 필수입니다.")
+
+    # 취소 후 현재고 음수 방지: 이 거래의 delta 를 제거한다.
+    locked_mi = _lock_managed_item(tx.managed_item)
+    current = get_current_stock(locked_mi)
+    if current - tx.quantity_delta < 0:
+        raise InsufficientStockError(
+            "취소 후 현재고가 음수가 되어 취소할 수 없습니다."
+        )
+
+    tx.status = TransactionStatus.CANCELED
+    tx.canceled_by = user
+    tx.canceled_at = timezone.now()
+    tx.cancel_reason = cancel_reason
+    tx.save(
+        update_fields=[
+            "status",
+            "canceled_by",
+            "canceled_at",
+            "cancel_reason",
+            "updated_at",
+        ]
+    )
+    return tx
+
+
+def bulk_approve_initial_counts(*, user, transaction_ids):
+    """초기재고 일괄 승인. (TECH_SPEC §11 / PRODUCT_SPEC §5.6, §10.13)
+
+    - 권한: MANAGER 이상
+    - 대상: PENDING INITIAL_COUNT (ADJUSTMENT 는 제외)
+    - 거래별 savepoint 로 처리하여 한 건 실패가 전체를 롤백하지 않는다.
+    - 결과: {"approved": [id...], "skipped": [{"id":, "reason":}...]}
+
+    주의: 함수 전체를 단일 atomic 으로 감싸지 않는다. (부분 성공 보장)
+    """
+    if not is_manager_or_above(user):
+        raise PermissionDeniedError("일괄 승인 권한이 없습니다. (MANAGER 이상)")
+
+    approved: list[int] = []
+    skipped: list[dict] = []
+
+    for tx_id in transaction_ids:
+        try:
+            with transaction.atomic():  # 거래별 savepoint
+                tx = StockTransaction.objects.select_for_update().get(pk=tx_id)
+
+                if tx.transaction_type != TransactionType.INITIAL_COUNT:
+                    skipped.append(
+                        {"id": tx_id, "reason": "INITIAL_COUNT 거래가 아님"}
+                    )
+                    continue
+                if tx.status != TransactionStatus.PENDING:
+                    skipped.append(
+                        {"id": tx_id, "reason": "PENDING 상태가 아님"}
+                    )
+                    continue
+
+                locked_mi = _lock_managed_item(tx.managed_item)
+                if has_approved_initial_count(locked_mi):
+                    skipped.append(
+                        {"id": tx_id, "reason": "이미 승인된 초기재고가 있음"}
+                    )
+                    continue
+
+                tx.status = TransactionStatus.APPROVED
+                tx.approved_by = user
+                tx.approved_at = timezone.now()
+                tx.save(
+                    update_fields=[
+                        "status",
+                        "approved_by",
+                        "approved_at",
+                        "updated_at",
+                    ]
+                )
+                approved.append(tx_id)
+        except StockTransaction.DoesNotExist:
+            skipped.append({"id": tx_id, "reason": "거래를 찾을 수 없음"})
+
+    return {"approved": approved, "skipped": skipped}
