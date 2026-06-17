@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }} · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>{{ page_title }}</h1>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">저장</button>
+</form>
+{% endblock %}

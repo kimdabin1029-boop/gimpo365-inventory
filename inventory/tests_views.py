@@ -1,17 +1,28 @@
 from django.urls import reverse
+from django.utils import timezone
 
 from core.factories import (
     BaseFixtureTestCase,
     create_item,
     create_managed_item,
 )
-from inventory.models import ItemCategory
+from inventory.models import (
+    ItemCategory,
+    StockTransaction,
+    TransactionStatus,
+    TransactionType,
+)
+from inventory.selectors import get_current_stock
 from inventory.services import (
     approve_transaction,
     create_stock_in,
     request_adjustment,
     request_initial_count,
 )
+
+
+def _now_str():
+    return timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M:%S")
 
 
 class DashboardAccessTest(BaseFixtureTestCase):
@@ -94,3 +105,87 @@ class CancelButtonVisibilityTest(BaseFixtureTestCase):
         self.assertContains(resp, f'id="cancel-{in_tx.pk}"')
         # ADJUSTMENT 는 취소 버튼 없음
         self.assertNotContains(resp, f'id="cancel-{adj.pk}"')
+
+
+class CreateViewTest(BaseFixtureTestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.item = create_item("거즈 5x5", category=ItemCategory.MEDICAL_SUPPLY)
+        cls.mi = create_managed_item(item=cls.item, department=cls.dept_skin)
+
+    def test_get_renders_form(self):
+        self.client.force_login(self.staff_skin)
+        for name in (
+            "stock_in_new",
+            "stock_out_new",
+            "adjustment_new",
+            "initial_count_new",
+        ):
+            resp = self.client.get(reverse(f"inventory:{name}"))
+            self.assertEqual(resp.status_code, 200)
+
+    def test_stock_in_stays_on_form(self):
+        """15.9 입고 등록 후 같은 Form에 머무름"""
+        self.client.force_login(self.staff_skin)
+        resp = self.client.post(
+            reverse("inventory:stock_in_new"),
+            data={
+                "managed_item": self.mi.pk,
+                "quantity": "10",
+                "occurred_at": _now_str(),
+            },
+        )
+        # redirect 가 아니라 같은 화면(200) 유지
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "입고가 등록되었습니다.")
+        # 거래가 service 를 통해 생성됨
+        tx = StockTransaction.objects.get(
+            managed_item=self.mi, transaction_type=TransactionType.IN
+        )
+        self.assertEqual(tx.status, TransactionStatus.APPROVED)
+        self.assertEqual(tx.created_by, self.staff_skin)
+
+    def test_stock_out_stays_on_form(self):
+        """15.10 출고 등록 후 같은 Form에 머무름"""
+        create_stock_in(user=self.staff_skin, managed_item=self.mi, quantity=10)
+        self.client.force_login(self.staff_skin)
+        resp = self.client.post(
+            reverse("inventory:stock_out_new"),
+            data={
+                "managed_item": self.mi.pk,
+                "transaction_type": TransactionType.OUT_USE.value,
+                "quantity": "3",
+                "occurred_at": _now_str(),
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "출고가 등록되었습니다.")
+        self.assertEqual(get_current_stock(self.mi), 7)
+
+    def test_stock_out_service_error_message(self):
+        """service 예외(현재고 초과 출고) 발생 시 실패 메시지 표시, 거래 미생성"""
+        create_stock_in(user=self.staff_skin, managed_item=self.mi, quantity=5)
+        self.client.force_login(self.staff_skin)
+        resp = self.client.post(
+            reverse("inventory:stock_out_new"),
+            data={
+                "managed_item": self.mi.pk,
+                "transaction_type": TransactionType.OUT_USE.value,
+                "quantity": "10",
+                "occurred_at": _now_str(),
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        # 현재고는 그대로 5, OUT 거래는 생성되지 않음
+        self.assertEqual(get_current_stock(self.mi), 5)
+        self.assertFalse(
+            StockTransaction.objects.filter(
+                managed_item=self.mi, transaction_type=TransactionType.OUT_USE
+            ).exists()
+        )
+
+    def test_create_requires_login(self):
+        resp = self.client.get(reverse("inventory:stock_in_new"))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(reverse("accounts:login"), resp.url)

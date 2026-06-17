@@ -13,5 +13,18 @@
   </ul>
 </section>
 
-{# 작업 버튼(입고/출고/조회/승인 등)은 해당 화면 구현(TASK 15~17)에서 추가한다. #}
+<section class="dashboard-actions">
+  <h2>작업</h2>
+  <ul>
+    <li><a href="{% url 'inventory:stock_in_new' %}">입고 등록</a></li>
+    <li><a href="{% url 'inventory:stock_out_new' %}">출고 등록</a></li>
+    <li><a href="{% url 'inventory:adjustment_new' %}">실사조정 요청</a></li>
+    <li><a href="{% url 'inventory:initial_count_new' %}">초기재고 입력</a></li>
+    <li><a href="{% url 'inventory:stock_list' %}">현재고 조회</a></li>
+    <li><a href="{% url 'inventory:low_stock' %}">최소재고 이하 품목</a></li>
+    <li><a href="{% url 'inventory:transaction_list' %}">거래 이력</a></li>
+  </ul>
+</section>
+
+{# 승인/취소 등 상태변경 화면 링크는 TASK 17 에서 추가한다. #}
 {% endblock %}
