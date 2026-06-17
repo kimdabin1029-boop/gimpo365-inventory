@@ -275,3 +275,135 @@ def request_initial_count(
         approved_at=approved_at,
         memo=memo,
     )
+
+
+# ---------------------------------------------------------------------------
+# 승인 / 반려 / 철회 service (TASK 11)
+# ---------------------------------------------------------------------------
+# 승인 큐 대상(= PENDING 가능) 거래 유형
+_PENDING_QUEUE_TYPES = (TransactionType.INITIAL_COUNT, TransactionType.ADJUSTMENT)
+
+
+@transaction.atomic
+def approve_transaction(*, user, transaction_obj, review_note=""):
+    """PENDING 거래 승인. (TECH_SPEC §11 / PRODUCT_SPEC §5.8, §10.12)
+
+    - 권한: MANAGER 이상
+    - row lock + 상태 재확인 (PENDING 만 승인 가능)
+    - INITIAL_COUNT: 승인 시점 APPROVED 중복 재검사
+    - ADJUSTMENT: 승인 후 현재고 음수 방지
+    - approved_by / approved_at 기록
+    """
+    if not is_manager_or_above(user):
+        raise PermissionDeniedError("승인 권한이 없습니다. (MANAGER 이상)")
+
+    tx = _lock_transaction(transaction_obj)
+    if tx.status != TransactionStatus.PENDING:
+        raise InvalidTransactionStateError(
+            "PENDING 상태의 거래만 승인할 수 있습니다."
+        )
+    if tx.transaction_type not in _PENDING_QUEUE_TYPES:
+        raise InvalidTransactionStateError(
+            "승인 대상은 INITIAL_COUNT / ADJUSTMENT 거래뿐입니다."
+        )
+
+    locked_mi = _lock_managed_item(tx.managed_item)
+
+    if tx.transaction_type == TransactionType.INITIAL_COUNT:
+        # 승인 시점 유일성 재검사 (TECH_SPEC §5.6 승인 시점 규칙)
+        if has_approved_initial_count(locked_mi):
+            raise DuplicateInitialCountError(
+                "이미 승인된 초기재고가 있어 승인할 수 없습니다."
+            )
+    else:  # ADJUSTMENT
+        current = get_current_stock(locked_mi)
+        if current + tx.quantity_delta < 0:
+            raise InsufficientStockError(
+                "승인 시 현재고가 음수가 되어 승인할 수 없습니다."
+            )
+
+    tx.status = TransactionStatus.APPROVED
+    tx.approved_by = user
+    tx.approved_at = timezone.now()
+    if review_note:
+        tx.review_note = review_note
+    tx.save(
+        update_fields=[
+            "status",
+            "approved_by",
+            "approved_at",
+            "review_note",
+            "updated_at",
+        ]
+    )
+    return tx
+
+
+@transaction.atomic
+def reject_transaction(*, user, transaction_obj, review_note):
+    """PENDING 거래 반려. (TECH_SPEC §11)
+
+    - 권한: MANAGER 이상
+    - review_note 필수
+    - 반려 시에도 approved_by / approved_at 를 기록한다. (PRODUCT_SPEC §10.12)
+    """
+    if not is_manager_or_above(user):
+        raise PermissionDeniedError("반려 권한이 없습니다. (MANAGER 이상)")
+    if not review_note or not str(review_note).strip():
+        raise InventoryError("반려 사유(review_note)는 필수입니다.")
+
+    tx = _lock_transaction(transaction_obj)
+    if tx.status != TransactionStatus.PENDING:
+        raise InvalidTransactionStateError(
+            "PENDING 상태의 거래만 반려할 수 있습니다."
+        )
+
+    tx.status = TransactionStatus.REJECTED
+    tx.approved_by = user
+    tx.approved_at = timezone.now()
+    tx.review_note = review_note
+    tx.save(
+        update_fields=[
+            "status",
+            "approved_by",
+            "approved_at",
+            "review_note",
+            "updated_at",
+        ]
+    )
+    return tx
+
+
+@transaction.atomic
+def withdraw_pending_transaction(*, user, transaction_obj, cancel_reason):
+    """PENDING 거래 철회. (TECH_SPEC §11 / PRODUCT_SPEC §6.2)
+
+    - 권한: 거래 생성자 또는 MANAGER 이상
+    - cancel_reason 필수
+    - PENDING → CANCELED, canceled_by / canceled_at 기록
+    """
+    tx = _lock_transaction(transaction_obj)
+
+    if not (tx.created_by_id == getattr(user, "id", None) or is_manager_or_above(user)):
+        raise PermissionDeniedError("철회 권한이 없습니다. (생성자 또는 MANAGER 이상)")
+    if not cancel_reason or not str(cancel_reason).strip():
+        raise InventoryError("철회 사유(cancel_reason)는 필수입니다.")
+    if tx.status != TransactionStatus.PENDING:
+        raise InvalidTransactionStateError(
+            "PENDING 상태의 거래만 철회할 수 있습니다."
+        )
+
+    tx.status = TransactionStatus.CANCELED
+    tx.canceled_by = user
+    tx.canceled_at = timezone.now()
+    tx.cancel_reason = cancel_reason
+    tx.save(
+        update_fields=[
+            "status",
+            "canceled_by",
+            "canceled_at",
+            "cancel_reason",
+            "updated_at",
+        ]
+    )
+    return tx
