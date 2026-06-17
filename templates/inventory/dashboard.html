@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}대시보드 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>재고 대시보드</h1>
+
+<section class="dashboard-summary">
+  <ul>
+    <li>오늘 내가 등록한 거래 수: <strong>{{ my_today_count }}</strong></li>
+    <li>최소재고 이하 품목: <strong>{{ low_stock_count }}</strong></li>
+    {% if is_manager %}
+      <li>승인 대기 거래: <strong>{{ pending_count }}</strong></li>
+    {% endif %}
+  </ul>
+</section>
+
+{# 작업 버튼(입고/출고/조회/승인 등)은 해당 화면 구현(TASK 15~17)에서 추가한다. #}
+{% endblock %}

@@ -1,0 +1,16 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}gimpo365-inventory{% endblock %}</title>
+</head>
+<body>
+  {% include "navbar.html" %}
+  {% include "messages.html" %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

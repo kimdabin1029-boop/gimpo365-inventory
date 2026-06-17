@@ -1,0 +1,18 @@
+<nav class="navbar">
+  <a class="navbar-brand" href="{% url 'inventory:dashboard' %}">gimpo365-inventory</a>
+  {% if user.is_authenticated %}
+    <span class="navbar-user">
+      {{ user.name|default:user.username }} ({{ user.get_role_display }}){% if user.department %} · {{ user.department.name }}{% endif %}
+    </span>
+    {# Django Admin 버튼은 is_staff == True 인 사용자에게만 노출 (TECH_SPEC §5) #}
+    {% if user.is_staff %}
+      <a id="django-admin-link" href="{% url 'admin:index' %}">Django Admin</a>
+    {% endif %}
+    <form class="navbar-logout" method="post" action="{% url 'accounts:logout' %}">
+      {% csrf_token %}
+      <button type="submit">로그아웃</button>
+    </form>
+  {% else %}
+    <a href="{% url 'accounts:login' %}">로그인</a>
+  {% endif %}
+</nav>
