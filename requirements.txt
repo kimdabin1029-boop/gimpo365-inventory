@@ -1,0 +1,7 @@
+# gimpo365-inventory 직접 의존성 (현재 동작 버전 고정)
+# 설치: pip install -r requirements.txt
+# (asgiref, sqlparse, tzdata 등은 아래 패키지의 전이 의존성으로 자동 설치됨)
+
+Django==6.0.6
+psycopg[binary]==3.3.4
+django-environ==0.13.0
