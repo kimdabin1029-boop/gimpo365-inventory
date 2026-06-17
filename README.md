@@ -108,6 +108,8 @@ $env:PGPASSWORD="postgres"
 - `StockTransaction` 생성·상태변경은 **service 함수로만**. View/Form/Admin 직접 `create()`/`status` 변경 금지.
 - 현재고는 계산값(별도 저장 안 함). 출고·취소 시 row lock 후 현재고 재검증으로 음수 방지.
 - 오입력은 삭제가 아니라 `CANCELED` 상태로 이력 보존.
+- **계정은 개인별로 발급**(공유 계정 금지), 퇴사자는 삭제가 아니라 `is_active=False` 비활성화 — 거래 추적성 유지.
+- 사용자 생성은 Django Admin "사용자 추가"(username+비밀번호) → 생성 후 역할/부서 지정. 직원은 `/accounts/password-change/` 에서 본인 비밀번호 변경.
 - 자세한 금지사항: [TASKS.md](TASKS.md) §0, [TECH_SPEC.md](TECH_SPEC.md) §3.
 
 ## 운영 투입

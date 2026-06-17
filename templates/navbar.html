@@ -8,6 +8,7 @@
     {% if user.is_staff %}
       <a id="django-admin-link" href="{% url 'admin:index' %}">Django Admin</a>
     {% endif %}
+    <a class="navbar-password" href="{% url 'accounts:password_change' %}">비밀번호 변경</a>
     <form class="navbar-logout" method="post" action="{% url 'accounts:logout' %}">
       {% csrf_token %}
       <button type="submit">로그아웃</button>

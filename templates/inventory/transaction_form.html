@@ -7,4 +7,27 @@
   {{ form.as_p }}
   <button type="submit">저장</button>
 </form>
+
+{# 관리품목 검색 필터 (v0.1.1, 외부 라이브러리 없음).
+   서버가 내려준 권한 범위 내 옵션만 필터링하므로 권한 밖 품목은 노출되지 않는다. #}
+<script>
+(function () {
+  var select = document.getElementById("id_managed_item");
+  if (!select) return;
+  var box = document.createElement("input");
+  box.type = "search";
+  box.placeholder = "관리품목 검색…";
+  box.setAttribute("aria-label", "관리품목 검색");
+  box.style.marginBottom = "6px";
+  box.style.display = "block";
+  select.parentNode.insertBefore(box, select);
+  box.addEventListener("input", function () {
+    var q = box.value.trim().toLowerCase();
+    Array.prototype.forEach.call(select.options, function (opt) {
+      if (!opt.value) return; // 빈(placeholder) 옵션 유지
+      opt.hidden = q !== "" && opt.text.toLowerCase().indexOf(q) === -1;
+    });
+  });
+})();
+</script>
 {% endblock %}

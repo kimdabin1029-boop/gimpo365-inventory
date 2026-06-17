@@ -133,7 +133,8 @@ class CreateViewTest(BaseFixtureTestCase):
             data={
                 "managed_item": self.mi.pk,
                 "quantity": "10",
-                "occurred_at": _now_str(),
+                # v0.1.1: 입고일자는 날짜 입력
+                "occurred_at": timezone.localdate().strftime("%Y-%m-%d"),
             },
         )
         # redirect 가 아니라 같은 화면(200) 유지
