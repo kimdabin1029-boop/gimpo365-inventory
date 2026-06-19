@@ -8,21 +8,22 @@
   <button type="submit">조회</button>
 </form>
 
-<table class="low-stock-table">
+<div class="table-wrap">
+<table class="data low-stock-table">
   <thead>
     <tr>
-      <th>부서</th><th>품목명</th><th>현재고</th><th>최소재고</th>
-      <th>부족 수량</th><th>보관장소</th><th>기본 공급업체</th>
+      <th>부서</th><th>품목명</th><th class="num">현재고</th><th class="num">최소재고</th>
+      <th class="num">부족 수량</th><th>보관장소</th><th>기본 공급업체</th>
     </tr>
   </thead>
   <tbody>
     {% for item in items %}
-    <tr>
+    <tr class="low">
       <td>{{ item.department.name }}</td>
       <td>{{ item.item.name }}</td>
-      <td>{{ item.current_stock }}</td>
-      <td>{{ item.minimum_stock }}</td>
-      <td>{{ item.shortage }}</td>
+      <td class="num">{{ item.current_stock }}</td>
+      <td class="num">{{ item.minimum_stock }}</td>
+      <td class="num">{{ item.shortage }}</td>
       <td>{{ item.storage_location }}</td>
       <td>{{ item.default_supplier.name|default:"-" }}</td>
     </tr>
@@ -31,4 +32,5 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

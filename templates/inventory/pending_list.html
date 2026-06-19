@@ -8,7 +8,7 @@
   <button type="submit">조회</button>
 </form>
 
-<section class="bulk-approve">
+<section class="card bulk-approve">
   <h2>초기재고 일괄 승인</h2>
   <form method="post" action="{% url 'inventory:bulk_approve' %}">
     {% csrf_token %}
@@ -17,11 +17,12 @@
   </form>
 </section>
 
-<table class="pending-table">
+<div class="table-wrap">
+<table class="data pending-table">
   <thead>
     <tr>
       <th>번호</th><th>부서</th><th>품목명</th><th>거래유형</th><th>요청자</th>
-      <th>시스템 기준 수량</th><th>입력 수량</th><th>증감 수량</th><th>작업</th>
+      <th class="num">시스템 기준 수량</th><th class="num">입력 수량</th><th class="num">증감 수량</th><th>작업</th>
     </tr>
   </thead>
   <tbody>
@@ -32,12 +33,12 @@
       <td>{{ t.managed_item.item.name }}</td>
       <td>{{ t.get_transaction_type_display }}</td>
       <td>{{ t.created_by }}</td>
-      <td>{{ t.expected_quantity|default:"-" }}</td>
-      <td>{{ t.quantity_input }}</td>
-      <td>{{ t.quantity_delta }}</td>
+      <td class="num">{{ t.expected_quantity|default:"-" }}</td>
+      <td class="num">{{ t.quantity_input }}</td>
+      <td class="num">{{ t.quantity_delta }}</td>
       <td>
-        <a href="{% url 'inventory:approve' t.pk %}">승인</a>
-        <a href="{% url 'inventory:reject' t.pk %}">반려</a>
+        <a href="{% url 'inventory:approve' t.pk %}">승인</a> ·
+        <a href="{% url 'inventory:reject' t.pk %}">반려</a> ·
         <a href="{% url 'inventory:withdraw' t.pk %}">철회</a>
       </td>
     </tr>
@@ -46,4 +47,5 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

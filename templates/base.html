@@ -5,11 +5,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}gimpo365-inventory{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body>
   {% include "navbar.html" %}
-  {% include "messages.html" %}
-  <main>
+  <main class="container">
+    {% include "messages.html" %}
     {% block content %}{% endblock %}
   </main>
 </body>

@@ -3,19 +3,26 @@
 {% block content %}
 <h1>{{ page_title }}</h1>
 
-<dl class="tx-detail">
-  <dt>거래 번호</dt><dd>#{{ tx.pk }}</dd>
-  <dt>관리품목</dt><dd>{{ tx.managed_item.department.name }} / {{ tx.managed_item.item.name }}</dd>
-  <dt>거래유형</dt><dd>{{ tx.get_transaction_type_display }}</dd>
-  <dt>현재 상태</dt><dd>{{ tx.get_status_display }}</dd>
-  <dt>입력 수량</dt><dd>{{ tx.quantity_input }}</dd>
-  <dt>증감값</dt><dd>{{ tx.quantity_delta }}</dd>
-  {% if tx.expected_quantity is not None %}<dt>시스템 기준 수량</dt><dd>{{ tx.expected_quantity }}</dd>{% endif %}
-</dl>
+<div class="card">
+  <dl class="tx-detail">
+    <dt>거래 번호</dt><dd>#{{ tx.pk }}</dd>
+    <dt>관리품목</dt><dd>{{ tx.managed_item.department.name }} / {{ tx.managed_item.item.name }}</dd>
+    <dt>거래유형</dt><dd>{{ tx.get_transaction_type_display }}</dd>
+    <dt>현재 상태</dt><dd>{{ tx.get_status_display }}</dd>
+    <dt>입력 수량</dt><dd>{{ tx.quantity_input }}</dd>
+    <dt>증감값</dt><dd>{{ tx.quantity_delta }}</dd>
+    {% if tx.expected_quantity is not None %}<dt>시스템 기준 수량</dt><dd>{{ tx.expected_quantity }}</dd>{% endif %}
+  </dl>
+</div>
 
-<form method="post" action="{{ action_url }}">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">확인</button>
-</form>
+<div class="card form-card">
+  <form method="post" action="{{ action_url }}">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="form-actions">
+      <button type="submit">확인</button>
+      <a class="back-link" href="{% url 'inventory:dashboard' %}">취소 / 대시보드로</a>
+    </div>
+  </form>
+</div>
 {% endblock %}

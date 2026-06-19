@@ -8,11 +8,12 @@
   <button type="submit">조회</button>
 </form>
 
-<table class="transaction-table">
+<div class="table-wrap">
+<table class="data transaction-table">
   <thead>
     <tr>
       <th>발생일시</th><th>입력일시</th><th>부서</th><th>품목명</th><th>거래유형</th>
-      <th>상태</th><th>수량</th><th>증감값</th><th>입력자</th><th>승인자</th>
+      <th>상태</th><th class="num">수량</th><th class="num">증감값</th><th>입력자</th><th>승인자</th>
       <th>취소자</th><th>공급업체</th><th>메모</th><th>취소 사유</th><th>취소</th>
     </tr>
   </thead>
@@ -25,8 +26,8 @@
       <td>{{ t.managed_item.item.name }}</td>
       <td>{{ t.get_transaction_type_display }}</td>
       <td>{{ t.get_status_display }}</td>
-      <td>{{ t.quantity_input }}</td>
-      <td>{{ t.quantity_delta }}</td>
+      <td class="num">{{ t.quantity_input }}</td>
+      <td class="num">{{ t.quantity_delta }}</td>
       <td>{{ t.created_by }}</td>
       <td>{{ t.approved_by|default:"-" }}</td>
       <td>{{ t.canceled_by|default:"-" }}</td>
@@ -49,4 +50,5 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

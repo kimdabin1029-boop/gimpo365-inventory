@@ -1,0 +1,235 @@
+/* gimpo365-inventory 최소 공통 스타일 (v0.1.1)
+   목적: 화려함이 아니라 병원 내부 업무용으로 차분하고 읽기 쉬운 기본 정리.
+   외부 라이브러리 없음. */
+
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --border: #d9dce1;
+  --text: #1f2933;
+  --muted: #66707a;
+  --primary: #2f6fb0;
+  --primary-dark: #265c93;
+  --danger: #c0392b;
+  --success-bg: #e6f4ea;
+  --success-fg: #1e7d40;
+  --error-bg: #fdecea;
+  --error-fg: #b32218;
+  --warning-bg: #fef7e0;
+  --warning-fg: #8a6d00;
+  --info-bg: #e8f1fb;
+  --info-fg: #1f5b96;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic",
+    "맑은 고딕", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+}
+
+a { color: var(--primary); }
+
+h1 { font-size: 1.4rem; margin: 0 0 16px; }
+h2 { font-size: 1.1rem; margin: 24px 0 12px; }
+
+.container {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+}
+
+/* ---------- navbar ---------- */
+.navbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  background: var(--primary-dark);
+  color: #fff;
+  padding: 10px 16px;
+}
+.navbar a { color: #fff; text-decoration: none; }
+.navbar-brand { font-weight: 700; font-size: 1.05rem; }
+.navbar-user { color: #dbe6f2; font-size: 0.9rem; }
+.navbar .navbar-spacer { margin-left: auto; }
+.navbar a.nav-link,
+.navbar #django-admin-link,
+.navbar .navbar-password {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.9rem;
+}
+.navbar-logout { display: inline; margin: 0; }
+.navbar-logout button {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+/* ---------- cards ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* ---------- dashboard ---------- */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.summary-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.summary-item .num { font-size: 1.6rem; font-weight: 700; }
+.summary-item .label { color: var(--muted); font-size: 0.85rem; }
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.action-card {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 12px;
+  font-weight: 600;
+}
+.action-card:hover { border-color: var(--primary); color: var(--primary); }
+.action-card.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ---------- forms ---------- */
+.form-card form p { margin: 0 0 14px; }
+.form-card label { display: block; font-weight: 600; margin-bottom: 4px; }
+.form-card input,
+.form-card select,
+.form-card textarea,
+form input,
+form select,
+form textarea {
+  width: 100%;
+  max-width: 440px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1rem;
+  background: #fff;
+}
+.form-card textarea { min-height: 56px; }
+.form-card .helptext { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 2px; }
+/* 필수 입력 표시 (지원 브라우저) */
+form p:has(input:required) > label::after,
+form p:has(select:required) > label::after {
+  content: " *";
+  color: var(--danger);
+}
+/* 에러 */
+.errorlist { color: var(--error-fg); list-style: none; padding: 0; margin: 4px 0; font-size: 0.85rem; }
+
+/* ---------- buttons ---------- */
+button[type="submit"], .btn {
+  display: inline-block;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+button[type="submit"]:hover, .btn:hover { background: var(--primary-dark); }
+.btn-secondary {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 9px 16px;
+}
+.form-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.back-link { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+
+/* ---------- tables ---------- */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  font-size: 0.92rem;
+}
+table.data thead th {
+  background: #eef1f5;
+  text-align: left;
+  padding: 9px 10px;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+table.data td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+table.data tbody tr:hover { background: #f7f9fc; }
+table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* 최소재고 이하 강조 */
+table.data tr.low td { background: #fff6f5; }
+.badge-low {
+  display: inline-block;
+  background: var(--error-bg);
+  color: var(--error-fg);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* ---------- messages ---------- */
+.messages { list-style: none; padding: 0; margin: 0 0 16px; }
+.messages .msg {
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border: 1px solid transparent;
+  font-size: 0.95rem;
+}
+.msg.success { background: var(--success-bg); color: var(--success-fg); border-color: #bfe3cb; }
+.msg.error { background: var(--error-bg); color: var(--error-fg); border-color: #f5c6c0; }
+.msg.warning { background: var(--warning-bg); color: var(--warning-fg); border-color: #f0e0a8; }
+.msg.info, .msg.debug { background: var(--info-bg); color: var(--info-fg); border-color: #c5dbf2; }
+
+/* ---------- filter form (inline) ---------- */
+.filter-form { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin-bottom: 16px; }
+.filter-form p { margin: 0; }
+.filter-form input, .filter-form select { max-width: 220px; }
+
+/* ---------- mobile ---------- */
+@media (max-width: 600px) {
+  body { font-size: 15px; }
+  .container { padding: 14px 12px 40px; }
+  form input, form select, form textarea, .form-card input,
+  .form-card select, .form-card textarea { max-width: 100%; }
+  .filter-form { flex-direction: column; align-items: stretch; }
+  .filter-form input, .filter-form select { max-width: 100%; }
+  button[type="submit"], .btn { width: 100%; text-align: center; padding: 12px 18px; }
+  .form-actions { flex-direction: column; align-items: stretch; }
+}
