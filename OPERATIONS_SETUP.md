@@ -112,6 +112,72 @@ netsh advfirewall firewall add rule name="gimpo365 inventory 8000" dir=in action
 - 백신/엔드포인트 보안 SW 가 포트를 막고 있지 않은지
 ```
 
+## 1B. 알파테스트 데이터 초기화 (DEBUG 전용)
+
+> ⚠️ **운영 환경에서 사용 금지.** 이 절차는 알파테스트 데이터를 비우기 위한 **비운영 teardown**
+> 이다. `DEBUG=False`(운영) 환경에서는 `reset_alpha_data` 명령이 **무조건 거부**된다.
+> 거래 기록은 운영에서 **삭제하지 않는다**(오입력은 취소/철회). 이 명령은 그 원칙과 별개의
+> 테스트 전용 도구다.
+
+### 왜 Admin 에서 StockTransaction delete 를 열지 않는가
+
+```text
+- 재고 거래(원장)는 운영에서 물리 삭제하지 않는다. 오입력은 "취소(CANCELED)" 이력으로 남긴다.
+  (PRODUCT_SPEC §6.1 / TECH_SPEC §0) → Admin add/delete 는 계속 닫아 둔다.
+- 알파테스트 데이터 정리는 운영 경로가 아니라, DEBUG 전용 management command 로만 수행한다.
+- 이 명령은 PROTECT FK 를 깨지 않고(자식→부모 순서로 삭제), service/Admin/모델을 변경하지 않는다.
+```
+
+### reset_alpha_data 명령
+
+기본 동작: **StockTransaction → ManagedItem → Item → Supplier 삭제.**
+유지: **Department(전체), User(전체), superuser/ADMIN.** (사용자/부서 구조는 그대로)
+
+```text
+# 삭제 전 미리보기 (실제 삭제 없음)
+python manage.py reset_alpha_data --dry-run
+
+# 재고 데이터 초기화 (확인 프롬프트: RESET 입력)
+python manage.py reset_alpha_data
+
+# 확인 프롬프트 생략
+python manage.py reset_alpha_data --yes
+
+# 테스트 사용자까지 삭제 (username 이 test_ 로 시작하거나 _test 로 끝나는 계정만,
+# superuser / ADMIN 은 어떤 경우에도 삭제하지 않음)
+python manage.py reset_alpha_data --yes --delete-test-users
+```
+
+가드:
+
+```text
+- DEBUG=False → 즉시 CommandError 로 중단 (운영 보호)
+- --yes 없으면 'RESET' 입력 확인 요구
+- --dry-run 은 삭제 대상/건수만 출력
+- 실행 후 삭제 건수 요약 출력
+```
+
+### 전체 DB 초기화가 필요한 경우 (대안)
+
+품목/거래 ID 까지 1 부터 새로 시작하거나 스키마째 비우려면:
+
+```text
+# (A) 모든 데이터 비우기(시퀀스 리셋 포함). superuser 도 삭제되므로 이후 재생성 필요.
+python manage.py flush
+
+# (B) DB 를 통째로 다시 만들기 (가장 깨끗)
+#   PostgreSQL 에서 DB drop & create 후
+python manage.py migrate
+```
+
+### 초기화 후 확인
+
+```text
+- reset_alpha_data 는 ADMIN/부서를 유지하므로 보통 추가 작업이 필요 없다.
+- flush / drop-create 를 했다면 createsuperuser 로 ADMIN 을 다시 만든다.
+- 어느 경우든 활성 ADMIN 계정이 최소 2개인지 확인한다. (PRODUCT_SPEC §14.1)
+```
+
 ## 2. 관리자(ADMIN) 계정 생성 — 최소 2개
 
 역할 변경과 ADMIN 권한 부여는 ADMIN 만 할 수 있다. ADMIN 이 1명뿐이고 접근이 막히면
