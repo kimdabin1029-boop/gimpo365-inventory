@@ -32,6 +32,86 @@
 
 > DB 는 PostgreSQL 만 사용한다. SQLite 는 사용하지 않는다.
 
+## 1A. 원내 네트워크(LAN)에서 테스트 접속하기
+
+> ⚠️ 이 방식은 **원내 제한 테스트용**이다. 실제 운영 배포는 별도 구성이 필요하다.
+> (HTTPS, WSGI/ASGI 서버(gunicorn/uvicorn) + 리버스 프록시(nginx 등), 정적 파일 collectstatic,
+>  DEBUG=False, 보안 설정. 9번 항목 참고) `runserver` 는 개발/테스트용 서버다.
+
+### 1A.1 127.0.0.1 의 의미
+
+```text
+- 127.0.0.1 (= localhost) 는 "그 PC 자기 자신"만 가리키는 주소다.
+- 따라서 python manage.py runserver (기본 127.0.0.1:8000) 로 띄우면
+  서버를 띄운 그 PC 에서만 접속되고, 원내 다른 PC 에서는 접속할 수 없다.
+- 다른 PC 에서 접속하려면 모든 인터페이스(0.0.0.0)로 바인딩해야 한다.
+```
+
+### 1A.2 원내 테스트 실행 명령
+
+```text
+python manage.py runserver 0.0.0.0:8000
+```
+
+- `0.0.0.0:8000` 은 서버 PC 의 모든 네트워크 인터페이스에서 8000 포트로 접속을 받는다.
+- 가상환경 사용 시: `.\.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000`
+
+### 1A.3 서버 PC 의 내부 IP 확인 (Windows)
+
+```text
+1. 명령 프롬프트(cmd) 또는 PowerShell 실행
+2. ipconfig  입력
+3. 현재 사용하는 어댑터(예: "이더넷" 또는 "Wi-Fi")의
+   "IPv4 주소" 를 확인한다.  예) 192.168.0.25
+```
+
+(PowerShell 대안: `ipconfig | findstr IPv4`)
+
+### 1A.4 다른 PC 에서 접속하는 주소
+
+```text
+http://<서버PC_IP>:8000/
+예) http://192.168.0.25:8000/
+```
+
+- 접속하는 PC 와 서버 PC 가 **같은 원내 네트워크(같은 공유기/스위치)** 에 있어야 한다.
+
+### 1A.5 ALLOWED_HOSTS 에 서버 IP 허용
+
+Django 는 `ALLOWED_HOSTS` 에 없는 호스트로 접속하면 차단(400)한다. `.env` 의
+`DJANGO_ALLOWED_HOSTS` 에 **서버 PC 의 내부 IP** 를 추가한다.
+
+```text
+# .env  (쉼표로 구분)
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,192.168.0.25
+```
+
+- IP 가 바뀌면(공유기 재시작 등) 값도 갱신한다. 고정이 필요하면 공유기에서 고정 IP 할당.
+- `.env` 의 `DJANGO_DEBUG=True` 인 테스트 환경 기준이다.
+
+### 1A.6 Windows 방화벽에서 8000 포트 허용
+
+처음 `runserver 0.0.0.0:8000` 실행 시 Windows 방화벽 경고가 뜨면 **개인 네트워크 허용**을
+체크한다. 수동 설정이 필요하면(관리자 권한 PowerShell):
+
+```text
+netsh advfirewall firewall add rule name="gimpo365 inventory 8000" dir=in action=allow protocol=TCP localport=8000
+```
+
+- 회사/도메인 네트워크 환경이면 해당 프로필도 허용이 필요할 수 있다.
+- 테스트 종료 후 규칙을 제거하려면:
+  `netsh advfirewall firewall delete rule name="gimpo365 inventory 8000"`
+
+### 1A.7 접속이 안 될 때 점검
+
+```text
+- 서버 PC 와 클라이언트 PC 가 같은 네트워크인지
+- runserver 가 0.0.0.0:8000 으로 떠 있는지 (127.0.0.1 이 아님)
+- .env 의 DJANGO_ALLOWED_HOSTS 에 서버 IP 가 포함됐는지 (400 이면 이 항목)
+- Windows 방화벽에서 8000 포트가 허용됐는지 (접속 자체가 안 되면 이 항목)
+- 백신/엔드포인트 보안 SW 가 포트를 막고 있지 않은지
+```
+
 ## 2. 관리자(ADMIN) 계정 생성 — 최소 2개
 
 역할 변경과 ADMIN 권한 부여는 ADMIN 만 할 수 있다. ADMIN 이 1명뿐이고 접근이 막히면

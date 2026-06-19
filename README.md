@@ -10,11 +10,18 @@
 | 문서 | 대상 | 용도 |
 |---|---|---|
 | **README.md** (이 문서) | 개발자 | 로컬 개발 환경, 실행, 테스트 |
-| [OPERATIONS_SETUP.md](OPERATIONS_SETUP.md) | 운영자 | 운영 서버 초기 세팅·계정·비상 복구 |
+| [OPERATIONS_SETUP.md](OPERATIONS_SETUP.md) | 운영자 | 운영 서버 초기 세팅·계정·비상 복구·LAN 테스트 |
 | [MANUAL_QA_CHECKLIST.md](MANUAL_QA_CHECKLIST.md) | 운영자/QA | 운영 투입 전 수동 점검 |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | 개발자 | 구조 / 장기 인트라넷 확장 분리 원칙 |
+| [ROADMAP.md](ROADMAP.md) | 전체 | 우선순위 / 단계별 방향 |
 | [PRODUCT_SPEC.md](PRODUCT_SPEC.md) | 전체 | 제품·운영 기준 명세 |
 | [TECH_SPEC.md](TECH_SPEC.md) | 개발자 | 구현 기준 명세 |
 | [TASKS.md](TASKS.md) | 개발자 | 작업 순서·진행 상태 |
+
+> **범위 / 방향:** 현재 v0.1 의 범위는 **재고관리**다. 장기적으로는 김포365한의원
+> **인트라넷 / 원내 업무 포털**의 첫 모듈로 확장될 수 있으나(게시판/문서함/체크리스트/
+> 근태/연차/인사는 향후 **별도 앱**으로 분리), 지금은 재고관리 안정화·사용성 개선이
+> 우선이며 확장 기능은 구현하지 않는다. 자세한 분리 원칙은 [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 기술 스택
 
@@ -85,6 +92,12 @@ CREATE DATABASE gimpo365_inventory;
 ```
 
 접속: `http://127.0.0.1:8000/` (로그인 → 역할별 대시보드) / `/admin/` (ADMIN 전용)
+
+> `127.0.0.1` 은 그 PC 자기 자신만 접속된다. **원내 다른 PC 에서 테스트 접속**하려면
+> `python manage.py runserver 0.0.0.0:8000` 으로 띄우고, `.env` 의 `DJANGO_ALLOWED_HOSTS`
+> 에 서버 PC 내부 IP 를 추가한 뒤 `http://<서버PC_IP>:8000/` 로 접속한다. 방화벽 8000 포트
+> 허용이 필요할 수 있다. 상세 절차는 [OPERATIONS_SETUP.md](OPERATIONS_SETUP.md) §1A 참고.
+> 이는 원내 제한 테스트용이며, 실제 운영 배포는 별도 구성이 필요하다.
 
 ## 테스트
 
