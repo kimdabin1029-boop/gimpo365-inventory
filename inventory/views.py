@@ -180,15 +180,19 @@ class TransactionListView(LoginRequiredMixin, ListView):
         return TransactionFilterForm(self.request.GET or None, user=self.request.user)
 
     def _resolve_date_range(self):
-        """거래일자(occurred_at) 기간. 기본 오늘~오늘. 빠른필터 range= today/7d/month/all."""
+        """거래일자(occurred_at) 기간. 기본 오늘~오늘.
+
+        빠른필터 range= today / 7d / month / 3m (최근 3개월).
+        '전체'는 데이터 과다 우려로 제거(B-6). 더 긴 기간은 수동 시작/종료일로 조회.
+        """
         today = timezone.localdate()
         rng = self.request.GET.get("range")
-        if rng == "all":
-            return None, None
         if rng == "7d":
             return today - timedelta(days=6), today
         if rng == "month":
             return today.replace(day=1), today
+        if rng == "3m":
+            return today - timedelta(days=90), today
         if rng == "today":
             return today, today
         gf = parse_date(self.request.GET.get("date_from") or "")

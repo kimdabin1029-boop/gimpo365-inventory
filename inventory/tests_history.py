@@ -54,9 +54,10 @@ class TransactionDateFilterTest(BaseFixtureTestCase):
         self.assertIn(self.tx_today, txs)
         self.assertNotIn(self.tx_old, txs)
 
-    def test_range_all_shows_everything(self):
+    def test_range_3m_includes_recent(self):
+        """B-6: 최근 3개월 빠른 필터 (10일 전 거래 포함, '전체' 대체)"""
         self.client.force_login(self.manager)
-        resp = self.client.get(reverse("inventory:transaction_list"), {"range": "all"})
+        resp = self.client.get(reverse("inventory:transaction_list"), {"range": "3m"})
         txs = list(resp.context["transactions"])
         self.assertIn(self.tx_today, txs)
         self.assertIn(self.tx_old, txs)
@@ -67,6 +68,14 @@ class TransactionDateFilterTest(BaseFixtureTestCase):
         txs = list(resp.context["transactions"])
         self.assertIn(self.tx_today, txs)
         self.assertNotIn(self.tx_old, txs)
+
+    def test_main_table_hides_input_datetime_column(self):
+        """B-1/B-4: 입력일시는 메인 표 컬럼이 아님 (헤더에 '입력일시' 컬럼 없음)"""
+        self.client.force_login(self.manager)
+        resp = self.client.get(reverse("inventory:transaction_list"), {"range": "3m"})
+        # 메인 표 헤더에 거래일자는 있고, 입력일시 컬럼 헤더(<th>입력일시)는 없음
+        self.assertContains(resp, "<th>거래일자</th>")
+        self.assertNotContains(resp, "<th>입력일시</th>")
 
     def test_explicit_date_range(self):
         self.client.force_login(self.manager)

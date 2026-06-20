@@ -9,11 +9,9 @@
   <a href="?range=today" {% if active_range == 'today' %}class="active"{% endif %}>오늘</a>
   · <a href="?range=7d" {% if active_range == '7d' %}class="active"{% endif %}>최근 7일</a>
   · <a href="?range=month" {% if active_range == 'month' %}class="active"{% endif %}>이번 달</a>
-  · <a href="?range=all" {% if active_range == 'all' %}class="active"{% endif %}>전체</a>
+  · <a href="?range=3m" {% if active_range == '3m' %}class="active"{% endif %}>최근 3개월</a>
   {% if range_from or range_to %}
-    <span class="muted">(적용: {{ range_from|default:"처음" }} ~ {{ range_to|default:"오늘 이후" }})</span>
-  {% else %}
-    <span class="muted">(적용: 전체)</span>
+    <span class="muted">(적용: {{ range_from|default:"처음" }} ~ {{ range_to|default:"오늘" }})</span>
   {% endif %}
 </p>
 
@@ -26,28 +24,21 @@
 <table class="data transaction-table">
   <thead>
     <tr>
-      <th>거래일자</th><th>입력일시</th><th>부서</th><th>품목명</th><th>거래유형</th>
-      <th>상태</th><th class="num">수량</th><th class="num">증감값</th><th>입력자</th><th>승인자</th>
-      <th>취소자</th><th>공급업체</th><th>메모</th><th>취소 사유</th><th>취소</th>
+      <th>거래일자</th><th>거래유형</th><th class="col-name">품목명</th><th class="col-dept">부서</th>
+      <th class="num">증감</th><th>상태</th><th>입력자</th><th>작업</th>
     </tr>
   </thead>
   <tbody>
     {% for t in transactions %}
     <tr>
-      <td>{{ t.occurred_at|date:"Y-m-d H:i" }}</td>
-      <td>{{ t.created_at|date:"Y-m-d H:i" }}</td>
-      <td>{{ t.managed_item.department.name }}</td>
-      <td>{{ t.managed_item.item.name }}</td>
+      {# 입력일시는 백로그/상세 성격 → 메인 표에서는 거래일자 셀 title 로만 확인 #}
+      <td title="입력일시: {{ t.created_at|date:'Y-m-d H:i' }}">{{ t.occurred_at|date:"Y-m-d" }}</td>
       <td>{{ t.get_transaction_type_display }}</td>
+      <td class="col-name">{{ t.managed_item.item.name }}</td>
+      <td class="col-dept">{{ t.managed_item.department.name }}</td>
+      <td class="num">{% if t.quantity_delta > 0 %}+{% endif %}{{ t.quantity_delta|qty }} {{ t.managed_item.get_unit_display }}</td>
       <td>{{ t.get_status_display }}</td>
-      <td class="num">{{ t.quantity_input|qty }}</td>
-      <td class="num">{{ t.quantity_delta|qty }}</td>
-      <td>{{ t.created_by }}</td>
-      <td>{{ t.approved_by|default:"-" }}</td>
-      <td>{{ t.canceled_by|default:"-" }}</td>
-      <td>{{ t.supplier.name|default:"-" }}</td>
-      <td>{{ t.memo }}</td>
-      <td>{{ t.cancel_reason }}</td>
+      <td>{{ t.created_by.display_name }}</td>
       <td>
         {% comment %}
         취소: can_cancel_transaction == True 인 일반 거래에만 표시.
@@ -62,7 +53,7 @@
       </td>
     </tr>
     {% empty %}
-    <tr><td colspan="15">거래 내역이 없습니다.</td></tr>
+    <tr><td colspan="8">거래 내역이 없습니다.</td></tr>
     {% endfor %}
   </tbody>
 </table>
