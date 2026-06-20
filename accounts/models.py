@@ -53,5 +53,10 @@ class User(AbstractUser):
         verbose_name = "사용자"
         verbose_name_plural = "사용자"
 
+    @property
+    def display_name(self):
+        """일반 화면 표시명. name → get_full_name() → username 순. (DB 변경 없음)"""
+        return self.name or self.get_full_name() or self.username
+
     def __str__(self):
-        return self.name or self.username
+        return self.display_name

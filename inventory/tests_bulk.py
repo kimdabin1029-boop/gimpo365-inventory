@@ -25,8 +25,9 @@ class BulkApproveInitialCountsTest(BaseFixtureTestCase):
         cls.mi_c = create_managed_item(item=cls.item_c, department=cls.dept_skin)
 
     def _pending_initial(self, mi, qty=10):
+        # 초기재고는 TEAM_LEADER 이상만 (A-3)
         return request_initial_count(
-            user=self.staff_skin, managed_item=mi, quantity=qty
+            user=self.team_leader_skin, managed_item=mi, quantity=qty
         )
 
     def test_bulk_approve_success(self):

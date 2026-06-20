@@ -69,6 +69,8 @@ class InventoryDashboardView(LoginRequiredMixin, TemplateView):
         )
 
         ctx["is_manager"] = is_manager_or_above(user)
+        # 초기재고 입력은 TEAM_LEADER 이상만 (A-3)
+        ctx["can_initial_count"] = has_role_at_least(user, Role.TEAM_LEADER)
         if ctx["is_manager"]:
             ctx["pending_count"] = get_pending_transactions(user).count()
         return ctx
@@ -358,6 +360,14 @@ class InitialCountRequestView(_ServiceCreateView):
     form_class = InitialCountForm
     page_title = "초기재고 입력"
     success_message = "초기재고가 등록되었습니다."
+
+    def dispatch(self, request, *args, **kwargs):
+        # 초기재고 입력은 TEAM_LEADER 이상만 (URL 직접 접근 차단). (A-3)
+        if request.user.is_authenticated and not has_role_at_least(
+            request.user, Role.TEAM_LEADER
+        ):
+            raise PermissionDenied("초기재고 입력 권한이 없습니다. (TEAM_LEADER 이상)")
+        return super().dispatch(request, *args, **kwargs)
 
     def perform(self, user, cd):
         request_initial_count(

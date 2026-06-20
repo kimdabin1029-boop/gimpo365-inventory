@@ -2,7 +2,7 @@
   <a class="navbar-brand" href="{% url 'inventory:dashboard' %}">gimpo365-inventory</a>
   {% if user.is_authenticated %}
     <span class="navbar-user">
-      {{ user.name|default:user.username }} · {{ user.get_role_display }}{% if user.department %} · {{ user.department.name }}{% endif %}
+      {{ user.display_name }} · {{ user.get_role_display }} · {{ user.department.name|default:"소속 없음" }}
     </span>
     <span class="navbar-spacer"></span>
     {# Django Admin 버튼은 is_staff == True 인 사용자에게만 노출 (TECH_SPEC §5) #}

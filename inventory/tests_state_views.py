@@ -51,7 +51,7 @@ class DirectAccessGuardTest(StateViewTestBase):
     def test_approve_url_direct_access_blocked(self):
         """15.5 approve URL 직접 접근 차단 (STAFF)"""
         ic = request_initial_count(
-            user=self.staff_skin, managed_item=self.mi, quantity=20
+            user=self.team_leader_skin, managed_item=self.mi, quantity=20
         )  # PENDING
         self.client.force_login(self.staff_skin)
         resp = self.client.get(reverse("inventory:approve", args=[ic.pk]))
@@ -62,7 +62,7 @@ class GetVsPostTest(StateViewTestBase):
     def test_get_does_not_change_state(self):
         """15.6 GET은 상태 변경하지 않음"""
         ic = request_initial_count(
-            user=self.staff_skin, managed_item=self.mi, quantity=20
+            user=self.team_leader_skin, managed_item=self.mi, quantity=20
         )  # PENDING
         self.client.force_login(self.manager)
         resp = self.client.get(reverse("inventory:approve", args=[ic.pk]))
@@ -73,7 +73,7 @@ class GetVsPostTest(StateViewTestBase):
     def test_post_changes_state(self):
         """15.7 POST만 상태 변경 수행"""
         ic = request_initial_count(
-            user=self.staff_skin, managed_item=self.mi, quantity=20
+            user=self.team_leader_skin, managed_item=self.mi, quantity=20
         )
         self.client.force_login(self.manager)
         resp = self.client.post(reverse("inventory:approve", args=[ic.pk]))
@@ -87,7 +87,7 @@ class CsrfTest(StateViewTestBase):
     def test_post_without_csrf_blocked(self):
         """15.8 CSRF 없는 POST 차단"""
         ic = request_initial_count(
-            user=self.staff_skin, managed_item=self.mi, quantity=20
+            user=self.team_leader_skin, managed_item=self.mi, quantity=20
         )
         csrf_client = Client(enforce_csrf_checks=True)
         csrf_client.force_login(self.manager)
@@ -111,10 +111,10 @@ class BulkApproveViewTest(StateViewTestBase):
         item2 = create_item("니들 30G", category=ItemCategory.MEDICAL_SUPPLY)
         mi2 = create_managed_item(item=item2, department=self.dept_skin)
         ic1 = request_initial_count(
-            user=self.staff_skin, managed_item=self.mi, quantity=20
+            user=self.team_leader_skin, managed_item=self.mi, quantity=20
         )
         ic2 = request_initial_count(
-            user=self.staff_skin, managed_item=mi2, quantity=30
+            user=self.team_leader_skin, managed_item=mi2, quantity=30
         )
         self.client.force_login(self.manager)
         resp = self.client.post(
@@ -129,7 +129,7 @@ class BulkApproveViewTest(StateViewTestBase):
 
     def test_bulk_approve_get_does_not_change_state(self):
         ic = request_initial_count(
-            user=self.staff_skin, managed_item=self.mi, quantity=20
+            user=self.team_leader_skin, managed_item=self.mi, quantity=20
         )
         self.client.force_login(self.manager)
         resp = self.client.get(reverse("inventory:bulk_approve"))

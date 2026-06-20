@@ -11,7 +11,8 @@ from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.utils import timezone
 
-from accounts.permissions import is_manager_or_above
+from accounts.models import Role
+from accounts.permissions import has_role_at_least, is_manager_or_above
 from inventory.exceptions import (
     DuplicateInitialCountError,
     InsufficientStockError,
@@ -238,11 +239,15 @@ def request_initial_count(
 ):
     """초기재고 입력. (TECH_SPEC §11 / PRODUCT_SPEC §5.5, §5.6)
 
-    - STAFF / TEAM_LEADER → PENDING
+    권한(v0.1.1 운영 기준):
+    - STAFF → 초기재고 입력 불가
+    - TEAM_LEADER → 본인 부서 관리품목, PENDING
     - MANAGER / ADMIN → 즉시 APPROVED
-    - APPROVED INITIAL_COUNT 가 이미 있으면 차단
-    - PENDING INITIAL_COUNT 중복은 허용
+    - APPROVED INITIAL_COUNT 가 이미 있으면 차단 / PENDING 중복은 허용
     """
+    # 초기재고 입력은 TEAM_LEADER 이상만 가능 (STAFF 차단)
+    if not has_role_at_least(user, Role.TEAM_LEADER):
+        raise PermissionDeniedError("초기재고 입력 권한이 없습니다. (TEAM_LEADER 이상)")
     _check_access(user, managed_item)
     qty = _validate_non_negative_quantity(quantity)
     occurred = _validate_occurred_at(occurred_at)

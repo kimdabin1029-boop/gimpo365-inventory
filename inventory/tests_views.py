@@ -116,12 +116,8 @@ class CreateViewTest(BaseFixtureTestCase):
 
     def test_get_renders_form(self):
         self.client.force_login(self.staff_skin)
-        for name in (
-            "stock_in_new",
-            "stock_out_new",
-            "adjustment_new",
-            "initial_count_new",
-        ):
+        # 초기재고는 TEAM_LEADER 이상만 (A-3) → STAFF 접근 폼에서 제외(별도 테스트로 커버)
+        for name in ("stock_in_new", "stock_out_new", "adjustment_new"):
             resp = self.client.get(reverse(f"inventory:{name}"))
             self.assertEqual(resp.status_code, 200)
 

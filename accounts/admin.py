@@ -26,8 +26,8 @@ class UserAdmin(DjangoUserAdmin):
 
     # 변경(change) 화면 fieldset 구분
     fieldsets = (
-        (None, {"fields": ("username", "password")}),
-        ("개인 정보", {"fields": ("name", "first_name", "last_name", "email")}),
+        ("계정 정보", {"fields": ("username", "password")}),
+        ("개인 정보", {"fields": ("name", "email")}),
         ("재고관리 권한", {"fields": ("role", "department")}),
         (
             "Django 관리자 권한",
@@ -41,6 +41,8 @@ class UserAdmin(DjangoUserAdmin):
                 ),
             },
         ),
+        # first_name/last_name 은 운영상 미사용. 모델 유지하되 접힘 영역으로만 노출.
+        ("기타(미사용)", {"classes": ("collapse",), "fields": ("first_name", "last_name")}),
         ("기록", {"fields": ("last_login", "date_joined")}),
     )
     # 추가(add) 화면: username + 비밀번호 + 재고관리 권한

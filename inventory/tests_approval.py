@@ -40,7 +40,8 @@ class ApprovalServiceTest(BaseFixtureTestCase):
         )
 
     def _pending_initial(self, *, qty=20, creator=None):
-        creator = creator or self.staff_skin
+        # 초기재고는 TEAM_LEADER 이상만 (A-3) → 기본 생성자 팀장
+        creator = creator or self.team_leader_skin
         return request_initial_count(
             user=creator, managed_item=self.mi, quantity=qty
         )
@@ -121,12 +122,12 @@ class ApprovalServiceTest(BaseFixtureTestCase):
 
     def test_withdraw_initial_count(self):
         """10.8 초기재고 철회 테스트"""
-        tx = self._pending_initial(qty=20, creator=self.staff_skin)
+        tx = self._pending_initial(qty=20, creator=self.team_leader_skin)
         canceled = withdraw_pending_transaction(
-            user=self.staff_skin, transaction_obj=tx, cancel_reason="중복 입력"
+            user=self.team_leader_skin, transaction_obj=tx, cancel_reason="중복 입력"
         )
         self.assertEqual(canceled.status, TransactionStatus.CANCELED)
-        self.assertEqual(canceled.canceled_by, self.staff_skin)
+        self.assertEqual(canceled.canceled_by, self.team_leader_skin)
 
     # ---------------- 권한 / 상태 전이 ----------------
     def test_approve_permission_denied_for_staff_and_leader(self):
@@ -161,9 +162,9 @@ class ApprovalServiceTest(BaseFixtureTestCase):
 
     def test_canceled_cannot_be_approved(self):
         """11.5 CANCELED 거래 재승인 차단 테스트"""
-        tx = self._pending_initial(qty=20, creator=self.staff_skin)
+        tx = self._pending_initial(qty=20, creator=self.team_leader_skin)
         withdraw_pending_transaction(
-            user=self.staff_skin, transaction_obj=tx, cancel_reason="취소"
+            user=self.team_leader_skin, transaction_obj=tx, cancel_reason="취소"
         )
         with self.assertRaises(InvalidTransactionStateError):
             approve_transaction(user=self.manager, transaction_obj=tx)
@@ -179,19 +180,19 @@ class ApprovalServiceTest(BaseFixtureTestCase):
 
     def test_withdraw_by_creator_allowed(self):
         """11.7 PENDING 철회 생성자 가능 테스트"""
-        tx = self._pending_initial(qty=20, creator=self.staff_skin)
+        tx = self._pending_initial(qty=20, creator=self.team_leader_skin)
         canceled = withdraw_pending_transaction(
-            user=self.staff_skin, transaction_obj=tx, cancel_reason="생성자 철회"
+            user=self.team_leader_skin, transaction_obj=tx, cancel_reason="생성자 철회"
         )
         self.assertEqual(canceled.status, TransactionStatus.CANCELED)
 
     def test_withdraw_by_other_denied(self):
         """11.8 PENDING 철회 타인 차단 테스트"""
-        tx = self._pending_initial(qty=20, creator=self.staff_skin)
-        # team_leader_skin 은 생성자도 MANAGER도 아님 → 차단
+        tx = self._pending_initial(qty=20, creator=self.team_leader_skin)
+        # staff_skin 은 생성자도 MANAGER도 아님 → 차단
         with self.assertRaises(PermissionDeniedError):
             withdraw_pending_transaction(
-                user=self.team_leader_skin,
+                user=self.staff_skin,
                 transaction_obj=tx,
                 cancel_reason="타인 시도",
             )

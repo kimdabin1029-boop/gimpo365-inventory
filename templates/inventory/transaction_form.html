@@ -26,8 +26,10 @@
   </div>
 </div>
 
-{# 관리품목 검색 필터 + 선택 정보 패널 (v0.1.1, 외부 라이브러리 없음).
-   서버가 내려준 권한 범위 내 옵션만 다루므로 권한 밖 품목은 노출/검색되지 않는다. #}
+{% comment %}
+관리품목 검색 필터 + 선택 정보 패널 (v0.1.1, 외부 라이브러리 없음).
+서버가 내려준 권한 범위 내 옵션만 다루므로 권한 밖 품목은 노출/검색되지 않는다.
+{% endcomment %}
 <script>
 (function () {
   var select = document.getElementById("id_managed_item");

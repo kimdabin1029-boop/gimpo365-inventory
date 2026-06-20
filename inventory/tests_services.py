@@ -208,10 +208,19 @@ class InitialCountServiceTest(BaseFixtureTestCase):
         cls.item = create_item("거즈 5x5", category=ItemCategory.MEDICAL_SUPPLY)
         cls.mi = create_managed_item(item=cls.item, department=cls.dept_skin)
 
-    def test_staff_initial_count_pending(self):
-        """10.1 STAFF 초기재고 요청 테스트 (PENDING)"""
+    def test_staff_initial_count_blocked(self):
+        """A-3: STAFF 는 초기재고 입력 불가"""
+        from inventory.exceptions import PermissionDeniedError
+
+        with self.assertRaises(PermissionDeniedError):
+            request_initial_count(
+                user=self.staff_skin, managed_item=self.mi, quantity=20
+            )
+
+    def test_team_leader_initial_count_pending(self):
+        """A-3: TEAM_LEADER 초기재고 요청 (PENDING)"""
         tx = request_initial_count(
-            user=self.staff_skin, managed_item=self.mi, quantity=20
+            user=self.team_leader_skin, managed_item=self.mi, quantity=20
         )
         self.assertEqual(tx.status, TransactionStatus.PENDING)
         self.assertEqual(tx.quantity_delta, Decimal("20"))
@@ -243,9 +252,9 @@ class InitialCountServiceTest(BaseFixtureTestCase):
 
     def test_pending_initial_count_duplicate_allowed(self):
         """10.4 PENDING 초기재고 중복 요청 허용"""
-        request_initial_count(user=self.staff_skin, managed_item=self.mi, quantity=20)
+        request_initial_count(user=self.team_leader_skin, managed_item=self.mi, quantity=20)
         # 승인된 것이 없으므로 두 번째 PENDING 요청도 허용
-        request_initial_count(user=self.staff_skin, managed_item=self.mi, quantity=18)
+        request_initial_count(user=self.team_leader_skin, managed_item=self.mi, quantity=18)
         pending = self.mi.stock_transactions.filter(
             transaction_type=TransactionType.INITIAL_COUNT,
             status=TransactionStatus.PENDING,
