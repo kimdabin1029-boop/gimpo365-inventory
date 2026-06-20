@@ -234,6 +234,11 @@ table.data tr.low td { background: #fff6f5; }
 .mi-info dd { margin: 0; }
 .muted { color: var(--muted); font-size: 0.9rem; margin-top: -8px; }
 
+/* ---------- 빠른 기간 필터 ---------- */
+.quick-range { margin: 0 0 12px; font-size: 0.92rem; }
+.quick-range a { text-decoration: none; padding: 2px 6px; border-radius: 5px; }
+.quick-range a.active { background: var(--primary); color: #fff; }
+
 /* ---------- filter form (inline) ---------- */
 .filter-form { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin-bottom: 16px; }
 .filter-form p { margin: 0; }

@@ -4,6 +4,19 @@
 {% block content %}
 <h1>거래이력</h1>
 
+<p class="quick-range">
+  거래일자 기준:
+  <a href="?range=today" {% if active_range == 'today' %}class="active"{% endif %}>오늘</a>
+  · <a href="?range=7d" {% if active_range == '7d' %}class="active"{% endif %}>최근 7일</a>
+  · <a href="?range=month" {% if active_range == 'month' %}class="active"{% endif %}>이번 달</a>
+  · <a href="?range=all" {% if active_range == 'all' %}class="active"{% endif %}>전체</a>
+  {% if range_from or range_to %}
+    <span class="muted">(적용: {{ range_from|default:"처음" }} ~ {{ range_to|default:"오늘 이후" }})</span>
+  {% else %}
+    <span class="muted">(적용: 전체)</span>
+  {% endif %}
+</p>
+
 <form method="get" class="filter-form">
   {{ filter_form.as_p }}
   <button type="submit">조회</button>

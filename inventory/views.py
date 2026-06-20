@@ -1,14 +1,19 @@
+from datetime import timedelta
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views import View
 from django.views.generic import ListView, TemplateView
 
-from accounts.permissions import is_manager_or_above
+from accounts.models import Role
+from accounts.permissions import has_role_at_least, is_manager_or_above
 from inventory.exceptions import InventoryError
+from inventory.models import StockTransaction, TransactionType
 from inventory.forms import (
     AdjustmentRequestForm,
     ApproveTransactionForm,
@@ -23,7 +28,6 @@ from inventory.forms import (
     TransactionFilterForm,
     WithdrawPendingTransactionForm,
 )
-from inventory.models import StockTransaction
 from inventory.permissions import can_cancel_transaction
 from inventory.selectors import (
     get_low_stock_managed_items,
@@ -173,6 +177,24 @@ class TransactionListView(LoginRequiredMixin, ListView):
     def get_filter_form(self):
         return TransactionFilterForm(self.request.GET or None, user=self.request.user)
 
+    def _resolve_date_range(self):
+        """거래일자(occurred_at) 기간. 기본 오늘~오늘. 빠른필터 range= today/7d/month/all."""
+        today = timezone.localdate()
+        rng = self.request.GET.get("range")
+        if rng == "all":
+            return None, None
+        if rng == "7d":
+            return today - timedelta(days=6), today
+        if rng == "month":
+            return today.replace(day=1), today
+        if rng == "today":
+            return today, today
+        gf = parse_date(self.request.GET.get("date_from") or "")
+        gt = parse_date(self.request.GET.get("date_to") or "")
+        if gf or gt:
+            return gf, gt
+        return today, today  # 기본값
+
     def get_queryset(self):
         self._form = self.get_filter_form()
         filters = {}
@@ -184,7 +206,13 @@ class TransactionListView(LoginRequiredMixin, ListView):
                 filters["transaction_type"] = cd["transaction_type"]
             if cd.get("status"):
                 filters["status"] = cd["status"]
-        return get_transactions(self.request.user, filters)
+        qs = get_transactions(self.request.user, filters)
+        self._range_from, self._range_to = self._resolve_date_range()
+        if self._range_from:
+            qs = qs.filter(occurred_at__date__gte=self._range_from)
+        if self._range_to:
+            qs = qs.filter(occurred_at__date__lte=self._range_to)
+        return qs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -192,7 +220,32 @@ class TransactionListView(LoginRequiredMixin, ListView):
         for tx in ctx["object_list"]:
             tx.can_cancel = can_cancel_transaction(user, tx)
         ctx["filter_form"] = self._form
+        ctx["range_from"] = self._range_from
+        ctx["range_to"] = self._range_to
+        ctx["active_range"] = self.request.GET.get("range", "")
         return ctx
+
+
+class AdjustmentRequestListView(LoginRequiredMixin, ListView):
+    """실사조정 내역 — 요청 처리 결과/사유 확인. (v0.1.1 / PRODUCT_SPEC §10.10)
+
+    권한: STAFF 본인 요청만 / TEAM_LEADER 본인 부서 / MANAGER·ADMIN 권한 범위.
+    조회 전용. 승인/반려/철회 로직은 변경하지 않는다.
+    """
+
+    template_name = "inventory/adjustment_list.html"
+    context_object_name = "transactions"
+    paginate_by = 50
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = get_transactions(user).filter(
+            transaction_type=TransactionType.ADJUSTMENT
+        )
+        # STAFF 는 본인이 요청한 것만
+        if not has_role_at_least(user, Role.TEAM_LEADER):
+            qs = qs.filter(created_by=user)
+        return qs
 
 
 # ---------------------------------------------------------------------------

@@ -38,6 +38,8 @@
      title="등록된 재고 품목과 부서별 관리 설정을 확인합니다.">품목 리스트</a>
   <a class="action-card" href="{% url 'inventory:transaction_list' %}"
      title="입고, 출고, 조정, 취소 기록을 확인합니다.">거래이력</a>
+  <a class="action-card" href="{% url 'inventory:adjustment_list' %}"
+     title="실사조정 요청의 처리 결과와 사유를 확인합니다.">실사조정 내역</a>
   {% if is_manager %}
     <a class="action-card" href="{% url 'inventory:pending_list' %}"
        title="승인 대기 중인 초기재고/실사조정을 승인·반려합니다.">승인 대기 큐</a>

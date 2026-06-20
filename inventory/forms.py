@@ -384,8 +384,17 @@ class StockFilterForm(forms.Form):
 
 
 class TransactionFilterForm(forms.Form):
-    """거래 이력 필터. (PRODUCT_SPEC §10.14)"""
+    """거래 이력 필터. (PRODUCT_SPEC §10.14)
 
+    기간 필터는 거래일자(occurred_at) 기준. 기본값(파라미터 없음)은 오늘~오늘.
+    """
+
+    date_from = forms.DateField(
+        label="거래일자(부터)", required=False, widget=_date_widget()
+    )
+    date_to = forms.DateField(
+        label="거래일자(까지)", required=False, widget=_date_widget()
+    )
     department = forms.ModelChoiceField(
         label="부서",
         queryset=Department.objects.filter(active_for_inventory=True),
