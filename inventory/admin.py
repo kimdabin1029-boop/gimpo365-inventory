@@ -1,6 +1,30 @@
+from django import forms
 from django.contrib import admin
+from django.utils.html import format_html, format_html_join
 
 from inventory.models import Item, ManagedItem, StockTransaction, Supplier
+
+
+class DatalistTextInput(forms.TextInput):
+    """기존 입력값을 <datalist> 자동완성으로 제공하는 TextInput. (v0.1.1, 모델 변경 없음)
+
+    storage_location 오타를 줄이기 위한 최소 대응. StorageLocation 모델은 신설하지 않는다.
+    """
+
+    def __init__(self, *args, options=(), list_id="storage-location-list", **kwargs):
+        self._options = list(options)
+        self._list_id = list_id
+        attrs = kwargs.pop("attrs", {}) or {}
+        attrs.setdefault("list", list_id)
+        super().__init__(*args, attrs=attrs, **kwargs)
+
+    def render(self, name, value, attrs=None, renderer=None):
+        html = super().render(name, value, attrs=attrs, renderer=renderer)
+        options = format_html_join(
+            "", '<option value="{}"></option>', ((o,) for o in self._options)
+        )
+        datalist = format_html('<datalist id="{}">{}</datalist>', self._list_id, options)
+        return html + datalist
 
 
 @admin.register(Supplier)
@@ -32,6 +56,19 @@ class ManagedItemAdmin(admin.ModelAdmin):
     autocomplete_fields = ["item", "department", "default_supplier"]
     # 운영 개시 후 unit 변경 금지는 ManagedItem.clean() 에서 검증되며,
     # Admin ModelForm 저장 시 full_clean 을 통해 동일하게 차단된다. (TECH_SPEC §6.4)
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        field = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if db_field.name == "storage_location":
+            # 기존에 입력된 보관장소 값을 datalist 자동완성으로 제공 (오타 감소, 모델 변경 없음)
+            values = (
+                ManagedItem.objects.exclude(storage_location="")
+                .order_by("storage_location")
+                .values_list("storage_location", flat=True)
+                .distinct()
+            )
+            field.widget = DatalistTextInput(options=values)
+        return field
 
 
 @admin.register(StockTransaction)

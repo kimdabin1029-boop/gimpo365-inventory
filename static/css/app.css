@@ -220,6 +220,20 @@ table.data tr.low td { background: #fff6f5; }
 .msg.warning { background: var(--warning-bg); color: var(--warning-fg); border-color: #f0e0a8; }
 .msg.info, .msg.debug { background: var(--info-bg); color: var(--info-fg); border-color: #c5dbf2; }
 
+/* ---------- 선택 품목 정보 패널 ---------- */
+.mi-info {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: #f0f4f9;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.mi-info h2 { margin: 0 0 8px; font-size: 0.95rem; }
+.mi-info dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; }
+.mi-info dt { color: var(--muted); }
+.mi-info dd { margin: 0; }
+.muted { color: var(--muted); font-size: 0.9rem; margin-top: -8px; }
+
 /* ---------- filter form (inline) ---------- */
 .filter-form { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin-bottom: 16px; }
 .filter-form p { margin: 0; }

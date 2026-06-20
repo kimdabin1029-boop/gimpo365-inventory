@@ -12,28 +12,83 @@
       <a class="back-link" href="{% url 'inventory:dashboard' %}">취소 / 대시보드로</a>
     </div>
   </form>
+
+  {# 선택 관리품목 정보 패널 (현재고/최소재고/보관장소/단위, 출고는 예상재고) #}
+  <div id="mi-info" class="mi-info" data-projected="{{ show_projected|yesno:'1,0' }}" hidden>
+    <h2>선택 품목 정보</h2>
+    <dl>
+      <dt>현재고</dt><dd><span id="mi-stock">-</span> <span class="mi-unit"></span></dd>
+      <dt>최소재고</dt><dd><span id="mi-min">-</span> <span class="mi-unit"></span></dd>
+      <dt>보관장소</dt><dd id="mi-loc">-</dd>
+      <dt>단위</dt><dd id="mi-unit2">-</dd>
+      <dd id="mi-projected-row" hidden><strong>출고 후 예상 재고: <span id="mi-projected">-</span> <span class="mi-unit"></span></strong></dd>
+    </dl>
+  </div>
 </div>
 
-{# 관리품목 검색 필터 (v0.1.1, 외부 라이브러리 없음).
-   서버가 내려준 권한 범위 내 옵션만 필터링하므로 권한 밖 품목은 노출되지 않는다. #}
+{# 관리품목 검색 필터 + 선택 정보 패널 (v0.1.1, 외부 라이브러리 없음).
+   서버가 내려준 권한 범위 내 옵션만 다루므로 권한 밖 품목은 노출/검색되지 않는다. #}
 <script>
 (function () {
   var select = document.getElementById("id_managed_item");
   if (!select) return;
+
+  // 1) 검색창: 품목명/부서/보관장소(옵션 텍스트 + data-loc) 부분일치 필터
   var box = document.createElement("input");
   box.type = "search";
-  box.placeholder = "관리품목 검색…";
+  box.placeholder = "관리품목 검색 (품목명/부서/보관장소)…";
   box.setAttribute("aria-label", "관리품목 검색");
-  box.style.marginBottom = "6px";
-  box.style.display = "block";
+  box.style.cssText = "display:block;margin-bottom:6px;width:100%;max-width:440px;";
   select.parentNode.insertBefore(box, select);
   box.addEventListener("input", function () {
     var q = box.value.trim().toLowerCase();
     Array.prototype.forEach.call(select.options, function (opt) {
-      if (!opt.value) return; // 빈(placeholder) 옵션 유지
-      opt.hidden = q !== "" && opt.text.toLowerCase().indexOf(q) === -1;
+      if (!opt.value) return;
+      var hay = (opt.text + " " + (opt.getAttribute("data-loc") || "")).toLowerCase();
+      opt.hidden = q !== "" && hay.indexOf(q) === -1;
     });
   });
+
+  // 2) 선택 정보 패널
+  var info = document.getElementById("mi-info");
+  var qtyInput = document.getElementById("id_quantity");
+  var projected = info && info.getAttribute("data-projected") === "1";
+
+  function num(v) { var n = parseFloat(v); return isNaN(n) ? null : n; }
+  function fmt(n) { return (Math.round(n * 1000) / 1000).toString(); }
+
+  function update() {
+    if (!info) return;
+    var opt = select.options[select.selectedIndex];
+    var stock = opt ? opt.getAttribute("data-stock") : null;
+    if (!opt || !opt.value || stock === null) {
+      info.hidden = true;
+      return;
+    }
+    info.hidden = false;
+    var unit = opt.getAttribute("data-unit") || "";
+    document.getElementById("mi-stock").textContent = stock;
+    document.getElementById("mi-min").textContent = opt.getAttribute("data-min") || "-";
+    document.getElementById("mi-loc").textContent = opt.getAttribute("data-loc") || "-";
+    document.getElementById("mi-unit2").textContent = unit;
+    Array.prototype.forEach.call(info.querySelectorAll(".mi-unit"), function (el) {
+      el.textContent = unit;
+    });
+    var prow = document.getElementById("mi-projected-row");
+    if (projected && qtyInput && prow) {
+      var s = num(stock), q = num(qtyInput.value);
+      if (s !== null && q !== null) {
+        prow.hidden = false;
+        document.getElementById("mi-projected").textContent = fmt(s - q);
+      } else {
+        prow.hidden = true;
+      }
+    }
+  }
+
+  select.addEventListener("change", update);
+  if (qtyInput) qtyInput.addEventListener("input", update);
+  update();
 })();
 </script>
 {% endblock %}

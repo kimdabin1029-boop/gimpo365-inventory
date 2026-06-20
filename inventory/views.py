@@ -137,6 +137,28 @@ class LowStockListView(LoginRequiredMixin, _StockFilterMixin, ListView):
         return ctx
 
 
+class ItemListView(LoginRequiredMixin, _StockFilterMixin, ListView):
+    """품목 리스트 (관리품목 + 부서별 설정) — 조회 전용. (v0.1.1)
+
+    권한 범위(STAFF/TL 본인 부서, MANAGER/ADMIN 전체)는 selector 가 강제한다.
+    """
+
+    template_name = "inventory/item_list.html"
+    context_object_name = "items"
+    paginate_by = 50
+
+    def get_queryset(self):
+        self._form = self.get_filter_form()
+        return get_managed_items_with_current_stock(
+            self.request.user, self.build_filters(self._form)
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["filter_form"] = self._form
+        return ctx
+
+
 class TransactionListView(LoginRequiredMixin, ListView):
     """거래 이력 조회. (PRODUCT_SPEC §10.14)
 
@@ -194,11 +216,18 @@ class _ServiceCreateView(LoginRequiredMixin, View):
     def get_form(self, data=None):
         return self.form_class(user=self.request.user, data=data)
 
+    # 출고 화면에서만 "출고 후 예상 재고" 표시
+    show_projected = False
+
     def _render(self, form):
         return render(
             self.request,
             self.template_name,
-            {"form": form, "page_title": self.page_title},
+            {
+                "form": form,
+                "page_title": self.page_title,
+                "show_projected": self.show_projected,
+            },
         )
 
     def get(self, request, *args, **kwargs):
@@ -243,6 +272,7 @@ class StockOutCreateView(_ServiceCreateView):
     form_class = StockOutForm
     page_title = "출고 등록"
     success_message = "출고가 등록되었습니다."
+    show_projected = True  # 출고 후 예상 재고 표시
 
     def perform(self, user, cd):
         create_stock_out(

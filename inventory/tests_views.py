@@ -157,7 +157,7 @@ class CreateViewTest(BaseFixtureTestCase):
                 "managed_item": self.mi.pk,
                 "transaction_type": TransactionType.OUT_USE.value,
                 "quantity": "3",
-                "occurred_at": _now_str(),
+                "occurred_at": timezone.localdate().strftime("%Y-%m-%d"),
             },
         )
         self.assertEqual(resp.status_code, 200)
@@ -174,7 +174,7 @@ class CreateViewTest(BaseFixtureTestCase):
                 "managed_item": self.mi.pk,
                 "transaction_type": TransactionType.OUT_USE.value,
                 "quantity": "10",
-                "occurred_at": _now_str(),
+                "occurred_at": timezone.localdate().strftime("%Y-%m-%d"),
             },
         )
         self.assertEqual(resp.status_code, 200)

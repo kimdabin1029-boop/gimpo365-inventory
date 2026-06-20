@@ -24,10 +24,10 @@ from inventory.models import (
     TransactionType,
 )
 from inventory.selectors import (
-    get_accessible_managed_items,
     get_managed_items_with_current_stock,
     get_pending_transactions,
 )
+from inventory.templatetags.inventory_extras import qty
 
 # 출고 유형 선택값 (OUT 계열만)
 OUT_TYPE_CHOICES = [
@@ -61,11 +61,38 @@ def _date_widget():
     return forms.DateInput(attrs={"type": "date"})
 
 
-class ManagedItemChoiceField(forms.ModelChoiceField):
-    """관리품목 선택지 라벨에 품목명/규격(specification)/부서/단위를 노출한다. (v0.1.1)
+class ManagedItemSelect(forms.Select):
+    """관리품목 <select>. 각 옵션에 현재고/최소재고/보관장소/단위 data-* 부여. (v0.1.1)
 
-    queryset 에 current_stock 주석이 있으면(출고 화면) 현재고도 함께 표시한다.
+    선택 시 화면의 정보 패널(현재고 등) 표시 및 출고 후 예상 재고 계산에 사용된다.
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stock_map = {}
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(
+            name, value, label, selected, index, subindex=subindex, attrs=attrs
+        )
+        pk = getattr(value, "value", value)
+        data = self.stock_map.get(str(pk))
+        if data:
+            option["attrs"].update(
+                {
+                    "data-stock": data["stock"],
+                    "data-min": data["min"],
+                    "data-loc": data["loc"],
+                    "data-unit": data["unit"],
+                }
+            )
+        return option
+
+
+class ManagedItemChoiceField(forms.ModelChoiceField):
+    """관리품목 선택지 라벨에 품목명/규격/부서/단위(+현재고) 노출. (v0.1.1)"""
+
+    widget = ManagedItemSelect
 
     def label_from_instance(self, obj):
         name = obj.item.name
@@ -75,46 +102,57 @@ class ManagedItemChoiceField(forms.ModelChoiceField):
         label = f"{head} / {obj.department.name} / {unit}"
         current = getattr(obj, "current_stock", None)
         if current is not None:
-            label += f" / 현재고 {current} {unit}"
+            label += f" / 현재고 {qty(current)} {unit}"
         return label
 
 
 # ---------------------------------------------------------------------------
-# 공통 mixin
+# 공통 helper (거래일자 / 관리품목 queryset)
 # ---------------------------------------------------------------------------
-class OccurredAtMixin(forms.Form):
-    """occurred_at 기본값 = 현재 시각, 미래 금지."""
-
-    occurred_at = forms.DateTimeField(
-        label="발생일시",
-        initial=timezone.now,
-        required=True,
-    )
-
-    def clean_occurred_at(self):
-        value = self.cleaned_data.get("occurred_at")
-        if value and value > timezone.now():
-            raise forms.ValidationError("발생일시는 미래일 수 없습니다.")
-        return value
+def _trade_date_field(label):
+    """거래일자(날짜 선택) 필드. 기본값 오늘, 시간 입력은 숨김."""
+    return forms.DateField(label=label, initial=timezone.localdate, widget=_date_widget())
 
 
-class AccessibleManagedItemMixin:
-    """managed_item queryset 을 사용자 접근 범위(활성)로 제한한다."""
+def _clean_trade_date(value, label):
+    """거래일자(date) → service 용 datetime 변환. 미래 금지.
 
-    def _set_managed_item_queryset(self, user):
-        qs = get_accessible_managed_items(user).filter(is_active=True)
-        self.fields["managed_item"].queryset = qs
+    오늘=현재 시각 / 과거=해당 일자 00:00(로컬). service.occurred_at(datetime) 구조 유지.
+    """
+    if value is None:
+        return None
+    today = timezone.localdate()
+    if value > today:
+        raise forms.ValidationError(f"{label}는 미래일 수 없습니다.")
+    if value == today:
+        return timezone.now()
+    return timezone.make_aware(datetime.combine(value, time.min))
+
+
+def _set_managed_item_with_stock(form, user):
+    """managed_item queryset 을 권한 범위(활성)로 제한 + 옵션에 현재고 data 부여.
+
+    user-aware 유지: get_accessible_managed_items 범위(권한 밖 미노출)를 그대로 따른다.
+    """
+    qs = get_managed_items_with_current_stock(user).filter(is_active=True)
+    field = form.fields["managed_item"]
+    field.queryset = qs
+    stock_map = {}
+    for mi in qs:
+        stock_map[str(mi.pk)] = {
+            "stock": qty(mi.current_stock),
+            "min": qty(mi.minimum_stock),
+            "loc": mi.storage_location or "-",
+            "unit": mi.get_unit_display(),
+        }
+    field.widget.stock_map = stock_map
 
 
 # ---------------------------------------------------------------------------
 # 생성 Form (user-aware)
 # ---------------------------------------------------------------------------
-class StockInForm(AccessibleManagedItemMixin, forms.Form):
-    """입고 등록 Form. (PRODUCT_SPEC §10.6)
-
-    v0.1.1: occurred_at 을 "입고일자"(날짜 선택)로 입력받아 datetime 으로 변환한다.
-    (OccurredAtMixin 의 발생일시 datetime 입력을 사용하지 않는다.)
-    """
+class StockInForm(forms.Form):
+    """입고 등록 Form. 입고일자(날짜) 입력. (PRODUCT_SPEC §10.6)"""
 
     managed_item = ManagedItemChoiceField(
         label="관리품목", queryset=StockTransaction.objects.none()
@@ -122,10 +160,7 @@ class StockInForm(AccessibleManagedItemMixin, forms.Form):
     quantity = forms.DecimalField(
         label="입고수량", max_digits=12, decimal_places=3, widget=_qty_widget(allow_zero=False)
     )
-    # 날짜만 선택. 내부적으로 datetime 으로 변환(오늘=현재시각, 과거=해당일 00:00). 미래 금지.
-    occurred_at = forms.DateField(
-        label="입고일자", initial=timezone.localdate, widget=_date_widget()
-    )
+    occurred_at = _trade_date_field("입고일자")
     supplier = forms.ModelChoiceField(
         label="공급업체",
         queryset=Supplier.objects.filter(is_active=True),
@@ -154,35 +189,23 @@ class StockInForm(AccessibleManagedItemMixin, forms.Form):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
-        self._set_managed_item_queryset(user)
+        _set_managed_item_with_stock(self, user)
         # STAFF 에게는 unit_price 필드를 노출하지 않는다. (PRODUCT_SPEC §10.6)
         if not has_role_at_least(user, Role.TEAM_LEADER):
             self.fields.pop("unit_price", None)
 
     def clean_quantity(self):
-        qty = self.cleaned_data.get("quantity")
-        if qty is None or qty <= 0:
+        value = self.cleaned_data.get("quantity")
+        if value is None or value <= 0:
             raise forms.ValidationError("입고수량은 0보다 커야 합니다.")
-        return qty
+        return value
 
     def clean_occurred_at(self):
-        """입고일자(date) → service 용 datetime 으로 변환. 미래 금지.
-
-        오늘: 현재 시각 / 과거: 해당 일자 00:00(로컬). service.occurred_at(datetime) 구조 유지.
-        """
-        d = self.cleaned_data.get("occurred_at")
-        if d is None:
-            return None
-        today = timezone.localdate()
-        if d > today:
-            raise forms.ValidationError("입고일자는 미래일 수 없습니다.")
-        if d == today:
-            return timezone.now()
-        return timezone.make_aware(datetime.combine(d, time.min))
+        return _clean_trade_date(self.cleaned_data.get("occurred_at"), "입고일자")
 
 
-class StockOutForm(AccessibleManagedItemMixin, OccurredAtMixin, forms.Form):
-    """출고 등록 Form. (PRODUCT_SPEC §10.7)"""
+class StockOutForm(forms.Form):
+    """출고 등록 Form. 출고일자(날짜) 입력. (PRODUCT_SPEC §10.7)"""
 
     managed_item = ManagedItemChoiceField(
         label="관리품목", queryset=StockTransaction.objects.none()
@@ -191,6 +214,7 @@ class StockOutForm(AccessibleManagedItemMixin, OccurredAtMixin, forms.Form):
     quantity = forms.DecimalField(
         label="출고수량", max_digits=12, decimal_places=3, widget=_qty_widget(allow_zero=False)
     )
+    occurred_at = _trade_date_field("출고일자")
     memo = forms.CharField(
         label="메모", required=False, widget=forms.Textarea(attrs={"rows": 2})
     )
@@ -200,20 +224,20 @@ class StockOutForm(AccessibleManagedItemMixin, OccurredAtMixin, forms.Form):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
-        # 현재고 주석이 달린 queryset → 옵션 라벨에 현재고 표시 (초과 출고 예방). user-aware 유지.
-        self.fields["managed_item"].queryset = get_managed_items_with_current_stock(
-            user
-        ).filter(is_active=True)
+        _set_managed_item_with_stock(self, user)
 
     def clean_quantity(self):
-        qty = self.cleaned_data.get("quantity")
-        if qty is None or qty <= 0:
+        value = self.cleaned_data.get("quantity")
+        if value is None or value <= 0:
             raise forms.ValidationError("출고수량은 0보다 커야 합니다.")
-        return qty
+        return value
+
+    def clean_occurred_at(self):
+        return _clean_trade_date(self.cleaned_data.get("occurred_at"), "출고일자")
 
 
-class AdjustmentRequestForm(AccessibleManagedItemMixin, OccurredAtMixin, forms.Form):
-    """실사조정 요청 Form. (PRODUCT_SPEC §10.10)"""
+class AdjustmentRequestForm(forms.Form):
+    """실사조정 요청 Form. 실사일자(날짜) 입력. (PRODUCT_SPEC §10.10)"""
 
     managed_item = ManagedItemChoiceField(
         label="관리품목", queryset=StockTransaction.objects.none()
@@ -221,6 +245,7 @@ class AdjustmentRequestForm(AccessibleManagedItemMixin, OccurredAtMixin, forms.F
     actual_quantity = forms.DecimalField(
         label="실제 수량", max_digits=12, decimal_places=3, widget=_qty_widget(allow_zero=True)
     )
+    occurred_at = _trade_date_field("실사일자")
     reason = forms.ChoiceField(
         label="조정 사유",
         choices=ADJUSTMENT_REASON_CHOICES,
@@ -235,17 +260,20 @@ class AdjustmentRequestForm(AccessibleManagedItemMixin, OccurredAtMixin, forms.F
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
-        self._set_managed_item_queryset(user)
+        _set_managed_item_with_stock(self, user)
 
     def clean_actual_quantity(self):
-        qty = self.cleaned_data.get("actual_quantity")
-        if qty is None or qty < 0:
+        value = self.cleaned_data.get("actual_quantity")
+        if value is None or value < 0:
             raise forms.ValidationError("실제 수량은 0 이상이어야 합니다.")
-        return qty
+        return value
+
+    def clean_occurred_at(self):
+        return _clean_trade_date(self.cleaned_data.get("occurred_at"), "실사일자")
 
 
-class InitialCountForm(AccessibleManagedItemMixin, OccurredAtMixin, forms.Form):
-    """초기재고 입력 Form. (PRODUCT_SPEC §10.11)"""
+class InitialCountForm(forms.Form):
+    """초기재고 입력 Form. 기준일자(날짜) 입력. (PRODUCT_SPEC §10.11)"""
 
     managed_item = ManagedItemChoiceField(
         label="관리품목", queryset=StockTransaction.objects.none()
@@ -253,6 +281,7 @@ class InitialCountForm(AccessibleManagedItemMixin, OccurredAtMixin, forms.Form):
     quantity = forms.DecimalField(
         label="초기재고 수량", max_digits=12, decimal_places=3, widget=_qty_widget(allow_zero=True)
     )
+    occurred_at = _trade_date_field("기준일자")
     memo = forms.CharField(
         label="메모", required=False, widget=forms.Textarea(attrs={"rows": 2})
     )
@@ -262,13 +291,16 @@ class InitialCountForm(AccessibleManagedItemMixin, OccurredAtMixin, forms.Form):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
-        self._set_managed_item_queryset(user)
+        _set_managed_item_with_stock(self, user)
 
     def clean_quantity(self):
-        qty = self.cleaned_data.get("quantity")
-        if qty is None or qty < 0:
+        value = self.cleaned_data.get("quantity")
+        if value is None or value < 0:
             raise forms.ValidationError("초기재고 수량은 0 이상이어야 합니다.")
-        return qty
+        return value
+
+    def clean_occurred_at(self):
+        return _clean_trade_date(self.cleaned_data.get("occurred_at"), "기준일자")
 
 
 # ---------------------------------------------------------------------------

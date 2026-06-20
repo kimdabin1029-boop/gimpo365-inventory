@@ -1100,6 +1100,14 @@ StockTransaction Admin에서 add/delete를 허용하지 마라.
 
 ## 7. v0.2 후보 (설계 메모, 미구현)
 
+### 7.0 StorageLocation 모델화 (v0.1.1 보류)
+
+알파테스트에서 "관리품목 storage_location 을 드롭다운으로 관리" 요청. v0.1.1 에서는
+모델 신설 없이 **기존 입력값 기반 datalist 자동완성(Admin)** 으로 최소 대응했다.
+별도 `StorageLocation` 모델 + ManagedItem FK 전환은 v0.2 설계 후보로 둔다.
+(이번 단계에서 모델/마이그레이션 변경 금지)
+
+
 ### 7.1 로그인 실패 잠금 (인증 로직 변경 — 별도 TASK 로 분리)
 
 이번 v0.1.1 에서는 구현하지 않고 설계 후보로만 기록한다. 인증 흐름에 영향을 주므로
