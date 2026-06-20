@@ -1,7 +1,8 @@
 {% extends "base.html" %}
-{% block title %}거래 이력 · gimpo365-inventory{% endblock %}
+{% load inventory_extras %}
+{% block title %}거래이력 · gimpo365-inventory{% endblock %}
 {% block content %}
-<h1>거래 이력</h1>
+<h1>거래이력</h1>
 
 <form method="get" class="filter-form">
   {{ filter_form.as_p }}
@@ -12,7 +13,7 @@
 <table class="data transaction-table">
   <thead>
     <tr>
-      <th>발생일시</th><th>입력일시</th><th>부서</th><th>품목명</th><th>거래유형</th>
+      <th>거래일자</th><th>입력일시</th><th>부서</th><th>품목명</th><th>거래유형</th>
       <th>상태</th><th class="num">수량</th><th class="num">증감값</th><th>입력자</th><th>승인자</th>
       <th>취소자</th><th>공급업체</th><th>메모</th><th>취소 사유</th><th>취소</th>
     </tr>
@@ -26,8 +27,8 @@
       <td>{{ t.managed_item.item.name }}</td>
       <td>{{ t.get_transaction_type_display }}</td>
       <td>{{ t.get_status_display }}</td>
-      <td class="num">{{ t.quantity_input }}</td>
-      <td class="num">{{ t.quantity_delta }}</td>
+      <td class="num">{{ t.quantity_input|qty }}</td>
+      <td class="num">{{ t.quantity_delta|qty }}</td>
       <td>{{ t.created_by }}</td>
       <td>{{ t.approved_by|default:"-" }}</td>
       <td>{{ t.canceled_by|default:"-" }}</td>
@@ -35,9 +36,11 @@
       <td>{{ t.memo }}</td>
       <td>{{ t.cancel_reason }}</td>
       <td>
-        {# 취소: can_cancel_transaction == True 인 일반 거래에만 표시.
-           INITIAL_COUNT / ADJUSTMENT 는 can_cancel 이 False 이므로 표시되지 않는다.
-           링크는 GET 확인 화면으로만 이동하며, 실제 취소는 그 화면의 POST 에서 수행한다. #}
+        {% comment %}
+        취소: can_cancel_transaction == True 인 일반 거래에만 표시.
+        INITIAL_COUNT / ADJUSTMENT 는 can_cancel 이 False 이므로 표시되지 않는다.
+        링크는 GET 확인 화면으로만 이동하며, 실제 취소는 그 화면의 POST 에서 수행한다.
+        {% endcomment %}
         {% if t.can_cancel %}
           <a class="cancel-action" id="cancel-{{ t.pk }}" href="{% url 'inventory:cancel' t.pk %}">취소</a>
         {% else %}

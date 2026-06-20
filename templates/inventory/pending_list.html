@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load inventory_extras %}
 {% block title %}승인 대기 큐 · gimpo365-inventory{% endblock %}
 {% block content %}
 <h1>승인 대기 큐</h1>
@@ -33,9 +34,9 @@
       <td>{{ t.managed_item.item.name }}</td>
       <td>{{ t.get_transaction_type_display }}</td>
       <td>{{ t.created_by }}</td>
-      <td class="num">{{ t.expected_quantity|default:"-" }}</td>
-      <td class="num">{{ t.quantity_input }}</td>
-      <td class="num">{{ t.quantity_delta }}</td>
+      <td class="num">{% if t.expected_quantity is not None %}{{ t.expected_quantity|qty }}{% else %}-{% endif %}</td>
+      <td class="num">{{ t.quantity_input|qty }}</td>
+      <td class="num">{{ t.quantity_delta|qty }}</td>
       <td>
         <a href="{% url 'inventory:approve' t.pk %}">승인</a> ·
         <a href="{% url 'inventory:reject' t.pk %}">반려</a> ·

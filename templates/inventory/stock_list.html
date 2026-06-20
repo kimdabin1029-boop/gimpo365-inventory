@@ -1,7 +1,8 @@
 {% extends "base.html" %}
-{% block title %}현재고 조회 · gimpo365-inventory{% endblock %}
+{% load inventory_extras %}
+{% block title %}재고현황 · gimpo365-inventory{% endblock %}
 {% block content %}
-<h1>현재고 조회</h1>
+<h1>재고현황</h1>
 
 <form method="get" class="filter-form">
   {{ filter_form.as_p }}
@@ -12,21 +13,21 @@
 <table class="data stock-table">
   <thead>
     <tr>
-      <th>부서</th><th>품목명</th><th>분류</th><th>규격</th><th>관리단위</th>
+      <th class="col-dept">부서</th><th class="col-name">품목명</th><th>분류</th><th>규격</th><th>단위</th>
       <th>보관장소</th><th class="num">현재고</th><th class="num">최소재고</th><th>상태</th><th>기본 공급업체</th>
     </tr>
   </thead>
   <tbody>
     {% for item in items %}
     <tr {% if item.current_stock <= item.minimum_stock %}class="low"{% endif %}>
-      <td>{{ item.department.name }}</td>
-      <td>{{ item.item.name }}</td>
+      <td class="col-dept">{{ item.department.name }}</td>
+      <td class="col-name">{{ item.item.name }}</td>
       <td>{{ item.item.get_category_display }}</td>
       <td>{{ item.item.specification }}</td>
       <td>{{ item.get_unit_display }}</td>
       <td>{{ item.storage_location }}</td>
-      <td class="num">{{ item.current_stock }}</td>
-      <td class="num">{{ item.minimum_stock }}</td>
+      <td class="num">{{ item.current_stock|qty }}</td>
+      <td class="num">{{ item.minimum_stock|qty }}</td>
       <td>{% if item.current_stock <= item.minimum_stock %}<span class="badge-low">최소재고 이하</span>{% else %}-{% endif %}</td>
       <td>{{ item.default_supplier.name|default:"-" }}</td>
     </tr>

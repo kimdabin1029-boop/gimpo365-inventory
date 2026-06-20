@@ -191,6 +191,9 @@ table.data thead th {
 table.data td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
 table.data tbody tr:hover { background: #f7f9fc; }
 table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* 부서/품목명 컬럼은 줄바꿈 방지(2줄 깨짐 개선) */
+table.data .col-dept { white-space: nowrap; min-width: 72px; }
+table.data .col-name { white-space: nowrap; min-width: 140px; }
 /* 최소재고 이하 강조 */
 table.data tr.low td { background: #fff6f5; }
 .badge-low {
