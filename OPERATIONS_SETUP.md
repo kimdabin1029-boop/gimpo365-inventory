@@ -178,6 +178,59 @@ python manage.py migrate
 - 어느 경우든 활성 ADMIN 계정이 최소 2개인지 확인한다. (PRODUCT_SPEC §14.1)
 ```
 
+### seed_alpha_inventory — 알파테스트 기본 데이터 생성 (DEBUG 전용)
+
+> ⚠️ **운영 환경 사용 금지.** 실제 운영 데이터 세팅용이 아니라 **알파테스트용 샘플 데이터**다.
+> 부서/테스트 사용자/공급업체/품목/관리품목/초기재고를 한 번에 만든다.
+> 초기재고는 **기존 service(`request_initial_count`)** 로 생성되어 APPROVED 로 현재고에 반영된다.
+> 테스트 데이터는 username `_test` 접미, 공급업체/품목명 `[테스트]` prefix 로 표시되어
+> `reset_alpha_data --delete-test-users` 와 호환된다.
+
+```text
+# 생성 예정 미리보기 (실제 생성 없음)
+python manage.py seed_alpha_inventory --dry-run
+
+# 전체(피부실+치료실) 생성 (확인: SEED 입력)
+python manage.py seed_alpha_inventory
+
+# 확인 생략
+python manage.py seed_alpha_inventory --yes
+
+# 특정 부서만
+python manage.py seed_alpha_inventory --department skin
+python manage.py seed_alpha_inventory --department treatment
+python manage.py seed_alpha_inventory --department all
+
+# 입고/출고 샘플 거래도 생성 (service 사용, [seed] 메모로 idempotent)
+python manage.py seed_alpha_inventory --yes --with-transactions
+```
+
+특징:
+
+```text
+- idempotent: 여러 번 실행해도 중복 생성되지 않음(get_or_create + 초기재고 유일성 확인).
+- 생성/재사용 건수 요약 출력.
+- DEBUG=False 면 CommandError 로 즉시 중단.
+- 테스트 계정 공통 비밀번호: test1234!
+- 생성 계정: manager_test(MANAGER), skin_staff_test/skin_leader_test(피부실),
+  treatment_staff_test/treatment_leader_test(치료실). superuser/ADMIN 은 만들지 않는다.
+- 일부 품목은 일부러 "최소재고 이하"가 되도록 구성(부족 품목 화면 테스트용).
+```
+
+### 알파테스트 1회 세팅 흐름 (reset + seed)
+
+```text
+1) python manage.py reset_alpha_data --dry-run     # 무엇이 지워질지 확인
+2) python manage.py reset_alpha_data               # 재고 데이터 초기화
+3) python manage.py seed_alpha_inventory --dry-run # 무엇이 생길지 확인
+4) python manage.py seed_alpha_inventory           # 샘플 데이터 생성
+5) python manage.py runserver 0.0.0.0:8000         # (원내 LAN 테스트는 §1A)
+6) STAFF/MANAGER 테스트 계정으로 로그인해 알파테스트
+   - 예: skin_staff_test / manager_test  (비밀번호 test1234!)
+```
+
+> 위 명령들은 모두 **알파테스트용**이며 운영 데이터 세팅용이 아니다.
+
 ## 2. 관리자(ADMIN) 계정 생성 — 최소 2개
 
 역할 변경과 ADMIN 권한 부여는 ADMIN 만 할 수 있다. ADMIN 이 1명뿐이고 접근이 막히면
