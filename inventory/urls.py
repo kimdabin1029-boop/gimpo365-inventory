@@ -13,7 +13,6 @@ from inventory.views import (
     CancelTransactionView,
     InitialCountRequestView,
     InventoryDashboardView,
-    ItemListView,
     LowStockListView,
     PendingTransactionListView,
     RejectTransactionView,
@@ -30,7 +29,6 @@ urlpatterns = [
     path("dashboard/", InventoryDashboardView.as_view(), name="dashboard"),
     path("stock/", StockListView.as_view(), name="stock_list"),
     path("low-stock/", LowStockListView.as_view(), name="low_stock"),
-    path("items/", ItemListView.as_view(), name="item_list"),
     path("transactions/", TransactionListView.as_view(), name="transaction_list"),
     path("adjustments/", AdjustmentRequestListView.as_view(), name="adjustment_list"),
     # 생성 화면 (TASK 16)

@@ -84,6 +84,8 @@ class ManagedItemSelect(forms.Select):
                     "data-min": data["min"],
                     "data-loc": data["loc"],
                     "data-unit": data["unit"],
+                    "data-name": data["name"],
+                    "data-dept": data["dept"],
                 }
             )
         return option
@@ -144,6 +146,8 @@ def _set_managed_item_with_stock(form, user):
             "min": qty(mi.minimum_stock),
             "loc": mi.storage_location or "-",
             "unit": mi.get_unit_display(),
+            "name": mi.item.name,
+            "dept": mi.department.name,
         }
     field.widget.stock_map = stock_map
 

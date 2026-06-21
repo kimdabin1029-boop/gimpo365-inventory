@@ -205,6 +205,29 @@ table.data tr.low td { background: #fff6f5; }
   font-size: 0.8rem;
   font-weight: 600;
 }
+.badge-ok {
+  display: inline-block;
+  background: var(--success-bg);
+  color: var(--success-fg);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* ---------- 관리품목 자동완성 ---------- */
+.mi-autocomplete { position: relative; max-width: 440px; margin-bottom: 6px; }
+.mi-autocomplete input[type="search"] { width: 100%; }
+.mi-candidates {
+  list-style: none; margin: 2px 0 0; padding: 0;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: #fff; max-height: 240px; overflow-y: auto;
+  position: absolute; left: 0; right: 0; z-index: 20;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+}
+.mi-candidates li { padding: 8px 10px; cursor: pointer; }
+.mi-candidates li:hover { background: #eef4fb; }
+.mi-info .mi-line { margin: 4px 0; }
 
 /* ---------- messages ---------- */
 .messages { list-style: none; padding: 0; margin: 0 0 16px; }

@@ -143,28 +143,6 @@ class LowStockListView(LoginRequiredMixin, _StockFilterMixin, ListView):
         return ctx
 
 
-class ItemListView(LoginRequiredMixin, _StockFilterMixin, ListView):
-    """품목 리스트 (관리품목 + 부서별 설정) — 조회 전용. (v0.1.1)
-
-    권한 범위(STAFF/TL 본인 부서, MANAGER/ADMIN 전체)는 selector 가 강제한다.
-    """
-
-    template_name = "inventory/item_list.html"
-    context_object_name = "items"
-    paginate_by = 50
-
-    def get_queryset(self):
-        self._form = self.get_filter_form()
-        return get_managed_items_with_current_stock(
-            self.request.user, self.build_filters(self._form)
-        )
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["filter_form"] = self._form
-        return ctx
-
-
 class TransactionListView(LoginRequiredMixin, ListView):
     """거래 이력 조회. (PRODUCT_SPEC §10.14)
 

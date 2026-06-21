@@ -104,7 +104,9 @@ class ManagedItemOptionsTest(BaseFixtureTestCase):
         self.assertFalse(resp_in.context["show_projected"])
 
 
-class ItemListViewTest(BaseFixtureTestCase):
+class StockOverviewScopeTest(BaseFixtureTestCase):
+    """C-1: 품목 리스트를 재고현황(stock_list)으로 통합. 권한 범위 유지."""
+
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -113,20 +115,26 @@ class ItemListViewTest(BaseFixtureTestCase):
         cls.mi_treat = create_managed_item(item=cls.item, department=cls.dept_treatment)
 
     def test_requires_login(self):
-        resp = self.client.get(reverse("inventory:item_list"))
+        resp = self.client.get(reverse("inventory:stock_list"))
         self.assertEqual(resp.status_code, 302)
 
     def test_staff_sees_only_own_department(self):
-        """2-5: 품목 리스트 권한 범위 (STAFF 본인 부서만)"""
         self.client.force_login(self.staff_skin)
-        resp = self.client.get(reverse("inventory:item_list"))
+        resp = self.client.get(reverse("inventory:stock_list"))
         items = list(resp.context["items"])
         self.assertIn(self.mi_skin, items)
         self.assertNotIn(self.mi_treat, items)
 
     def test_manager_sees_all(self):
         self.client.force_login(self.manager)
-        resp = self.client.get(reverse("inventory:item_list"))
+        resp = self.client.get(reverse("inventory:stock_list"))
         items = list(resp.context["items"])
         self.assertIn(self.mi_skin, items)
         self.assertIn(self.mi_treat, items)
+
+    def test_item_list_url_removed(self):
+        """품목 리스트 메뉴/URL 제거됨"""
+        from django.urls import NoReverseMatch
+
+        with self.assertRaises(NoReverseMatch):
+            reverse("inventory:item_list")

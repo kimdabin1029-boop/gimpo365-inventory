@@ -13,81 +13,119 @@
     </div>
   </form>
 
-  {# 선택 관리품목 정보 패널 (현재고/최소재고/보관장소/단위, 출고는 예상재고) #}
+  {% comment %}
+  선택 관리품목 정보 패널 (현재고/최소재고/보관장소/단위, 출고는 예상재고).
+  후보 리스트에는 최소 정보(품목명·부서)만, 상세 수치는 이 패널에서만 표시한다. (중복 제거)
+  {% endcomment %}
   <div id="mi-info" class="mi-info" data-projected="{{ show_projected|yesno:'1,0' }}" hidden>
-    <h2>선택 품목 정보</h2>
-    <dl>
-      <dt>현재고</dt><dd><span id="mi-stock">-</span> <span class="mi-unit"></span></dd>
-      <dt>최소재고</dt><dd><span id="mi-min">-</span> <span class="mi-unit"></span></dd>
-      <dt>보관장소</dt><dd id="mi-loc">-</dd>
-      <dt>단위</dt><dd id="mi-unit2">-</dd>
-      <dd id="mi-projected-row" hidden><strong>출고 후 예상 재고: <span id="mi-projected">-</span> <span class="mi-unit"></span></strong></dd>
-    </dl>
+    <h2 id="mi-title">선택 품목 정보</h2>
+    <p class="mi-line">
+      현재고 <strong id="mi-stock">-</strong>
+      · 최소재고 <strong id="mi-min">-</strong>
+      · 보관장소 <strong id="mi-loc">-</strong>
+      · 단위 <strong id="mi-unit2">-</strong>
+    </p>
+    <p id="mi-projected-row" class="mi-line" hidden>
+      출고 후 예상 재고: <strong id="mi-projected">-</strong>
+    </p>
   </div>
 </div>
 
 {% comment %}
-관리품목 검색 필터 + 선택 정보 패널 (v0.1.1, 외부 라이브러리 없음).
-서버가 내려준 권한 범위 내 옵션만 다루므로 권한 밖 품목은 노출/검색되지 않는다.
+관리품목 자동완성 (v0.1.1, 외부 라이브러리 없음).
+실제 폼 필드(<select name=managed_item>)는 숨겨두고 값만 유지하므로 폼 검증/권한 범위가 그대로 유지된다.
+서버가 내려준 권한 범위 내 옵션만 다루므로 권한 밖 품목은 후보에 노출/검색되지 않는다.
 {% endcomment %}
 <script>
 (function () {
   var select = document.getElementById("id_managed_item");
   if (!select) return;
 
-  // 1) 검색창: 품목명/부서/보관장소(옵션 텍스트 + data-loc) 부분일치 필터
-  var box = document.createElement("input");
-  box.type = "search";
-  box.placeholder = "관리품목 검색 (품목명/부서/보관장소)…";
-  box.setAttribute("aria-label", "관리품목 검색");
-  box.style.cssText = "display:block;margin-bottom:6px;width:100%;max-width:440px;";
-  select.parentNode.insertBefore(box, select);
-  box.addEventListener("input", function () {
-    var q = box.value.trim().toLowerCase();
+  // 실제 select 는 숨기고(값 제출용 유지), 그 위에 자동완성 UI 를 만든다.
+  select.style.display = "none";
+
+  var wrap = document.createElement("div");
+  wrap.className = "mi-autocomplete";
+  var input = document.createElement("input");
+  input.type = "search";
+  input.placeholder = "관리품목 검색 (품목명/부서/보관장소)…";
+  input.setAttribute("aria-label", "관리품목 검색");
+  input.autocomplete = "off";
+  var list = document.createElement("ul");
+  list.className = "mi-candidates";
+  list.hidden = true;
+  wrap.appendChild(input);
+  wrap.appendChild(list);
+  select.parentNode.insertBefore(wrap, select);
+
+  // 현재 선택값이 있으면 입력창에 반영
+  function selectedOption() { return select.options[select.selectedIndex]; }
+  function labelOf(opt) {
+    var name = opt.getAttribute("data-name") || opt.text;
+    var dept = opt.getAttribute("data-dept") || "";
+    return dept ? (name + " · " + dept) : name;
+  }
+  if (select.value) input.value = labelOf(selectedOption());
+
+  function render(q) {
+    list.innerHTML = "";
+    var count = 0;
     Array.prototype.forEach.call(select.options, function (opt) {
       if (!opt.value) return;
-      var hay = (opt.text + " " + (opt.getAttribute("data-loc") || "")).toLowerCase();
-      opt.hidden = q !== "" && hay.indexOf(q) === -1;
+      var hay = (
+        (opt.getAttribute("data-name") || opt.text) + " " +
+        (opt.getAttribute("data-dept") || "") + " " +
+        (opt.getAttribute("data-loc") || "")
+      ).toLowerCase();
+      if (q && hay.indexOf(q) === -1) return;
+      var li = document.createElement("li");
+      li.textContent = labelOf(opt);          // 후보: 품목명 · 부서 (최소 정보)
+      li.dataset.value = opt.value;
+      li.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        select.value = opt.value;
+        input.value = labelOf(opt);
+        list.hidden = true;
+        select.dispatchEvent(new Event("change"));
+      });
+      list.appendChild(li);
+      count++;
     });
-  });
+    list.hidden = count === 0;
+  }
 
-  // 2) 선택 정보 패널
+  input.addEventListener("input", function () { render(input.value.trim().toLowerCase()); });
+  input.addEventListener("focus", function () { render(input.value.trim().toLowerCase()); });
+  input.addEventListener("blur", function () { setTimeout(function () { list.hidden = true; }, 150); });
+
+  // 선택 정보 패널
   var info = document.getElementById("mi-info");
   var qtyInput = document.getElementById("id_quantity");
   var projected = info && info.getAttribute("data-projected") === "1";
-
   function num(v) { var n = parseFloat(v); return isNaN(n) ? null : n; }
   function fmt(n) { return (Math.round(n * 1000) / 1000).toString(); }
 
   function update() {
     if (!info) return;
-    var opt = select.options[select.selectedIndex];
+    var opt = selectedOption();
     var stock = opt ? opt.getAttribute("data-stock") : null;
-    if (!opt || !opt.value || stock === null) {
-      info.hidden = true;
-      return;
-    }
+    if (!opt || !opt.value || stock === null) { info.hidden = true; return; }
     info.hidden = false;
-    var unit = opt.getAttribute("data-unit") || "";
+    document.getElementById("mi-title").textContent = labelOf(opt);
     document.getElementById("mi-stock").textContent = stock;
     document.getElementById("mi-min").textContent = opt.getAttribute("data-min") || "-";
     document.getElementById("mi-loc").textContent = opt.getAttribute("data-loc") || "-";
-    document.getElementById("mi-unit2").textContent = unit;
-    Array.prototype.forEach.call(info.querySelectorAll(".mi-unit"), function (el) {
-      el.textContent = unit;
-    });
+    document.getElementById("mi-unit2").textContent = opt.getAttribute("data-unit") || "-";
     var prow = document.getElementById("mi-projected-row");
     if (projected && qtyInput && prow) {
       var s = num(stock), q = num(qtyInput.value);
       if (s !== null && q !== null) {
         prow.hidden = false;
-        document.getElementById("mi-projected").textContent = fmt(s - q);
-      } else {
-        prow.hidden = true;
-      }
+        document.getElementById("mi-projected").textContent =
+          fmt(s - q) + " " + (opt.getAttribute("data-unit") || "");
+      } else { prow.hidden = true; }
     }
   }
-
   select.addEventListener("change", update);
   if (qtyInput) qtyInput.addEventListener("input", update);
   update();
