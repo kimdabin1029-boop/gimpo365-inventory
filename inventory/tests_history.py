@@ -15,6 +15,7 @@ from inventory.services import (
     create_stock_in,
     reject_transaction,
     request_adjustment,
+    request_initial_count,
 )
 
 
@@ -101,39 +102,38 @@ class AdjustmentListVisibilityTest(BaseFixtureTestCase):
         )
         create_stock_in(user=cls.manager, managed_item=cls.mi, quantity=10)
         create_stock_in(user=cls.manager, managed_item=cls.mi_treat, quantity=10)
-        # staff_skin 의 조정 요청 → 반려(사유 기록)
+        # 최초 재고 승인(피부실 mi) → 이후 실사조정 가능
+        ic = request_initial_count(user=cls.manager, managed_item=cls.mi, quantity=0)
+        # team_leader_skin(피부실) 의 실사조정 요청 → 반려(사유 기록)
         cls.adj_skin = request_adjustment(
-            user=cls.staff_skin, managed_item=cls.mi, actual_quantity=7, reason="실물 재고 부족"
+            user=cls.team_leader_skin, managed_item=cls.mi, actual_quantity=7,
+            reason="실물 재고 부족",
         )
         reject_transaction(
             user=cls.manager, transaction_obj=cls.adj_skin, review_note="근거 불충분"
         )
-        # 치료실 staff 의 조정 요청
+        # 치료실 실사조정 요청 (MANAGER 가 생성)
         cls.adj_treat = request_adjustment(
-            user=cls.staff_treatment, managed_item=cls.mi_treat, actual_quantity=8, reason="기타"
+            user=cls.manager, managed_item=cls.mi_treat, actual_quantity=8, reason="기타"
         )
 
-    def test_staff_sees_only_own_requests(self):
-        """3-4: STAFF 는 본인 요청만"""
+    def test_staff_sees_none(self):
+        """STAFF 는 생성 권한이 없어 본인 요청이 없음(빈 목록)"""
         self.client.force_login(self.staff_skin)
         resp = self.client.get(reverse("inventory:adjustment_list"))
         txs = list(resp.context["transactions"])
-        self.assertIn(self.adj_skin, txs)
+        self.assertNotIn(self.adj_skin, txs)
         self.assertNotIn(self.adj_treat, txs)
 
-    def test_staff_sees_review_reason(self):
-        """STAFF 가 본인 요청의 반려 사유를 확인 가능"""
-        self.client.force_login(self.staff_skin)
-        resp = self.client.get(reverse("inventory:adjustment_list"))
-        self.assertContains(resp, "근거 불충분")
-        self.assertContains(resp, "실물 재고 부족")
-
-    def test_team_leader_sees_department_requests(self):
+    def test_team_leader_sees_department_with_reason(self):
+        """3-4: TEAM_LEADER 본인 부서 요청 + 반려 사유 확인"""
         self.client.force_login(self.team_leader_skin)
         resp = self.client.get(reverse("inventory:adjustment_list"))
         txs = list(resp.context["transactions"])
-        self.assertIn(self.adj_skin, txs)  # 본인 부서(피부실)
-        self.assertNotIn(self.adj_treat, txs)  # 타 부서
+        self.assertIn(self.adj_skin, txs)       # 본인 부서(피부실)
+        self.assertNotIn(self.adj_treat, txs)   # 타 부서
+        self.assertContains(resp, "근거 불충분")
+        self.assertContains(resp, "실물 재고 부족")
 
     def test_manager_sees_all_requests(self):
         self.client.force_login(self.manager)
@@ -141,3 +141,17 @@ class AdjustmentListVisibilityTest(BaseFixtureTestCase):
         txs = list(resp.context["transactions"])
         self.assertIn(self.adj_skin, txs)
         self.assertIn(self.adj_treat, txs)
+
+    def test_initial_count_appears_in_list(self):
+        """3-7: 최초 재고 입력(INITIAL_COUNT)도 내역에 표시"""
+        mi2 = create_managed_item(
+            item=create_item("알콜솜", category=ItemCategory.HYGIENE_SUPPLY),
+            department=self.dept_skin,
+        )
+        ic = request_initial_count(
+            user=self.team_leader_skin, managed_item=mi2, quantity=20
+        )  # PENDING INITIAL_COUNT
+        self.client.force_login(self.manager)
+        resp = self.client.get(reverse("inventory:adjustment_list"))
+        self.assertIn(ic, list(resp.context["transactions"]))
+        self.assertContains(resp, "최초 재고 입력")

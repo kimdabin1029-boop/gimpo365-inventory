@@ -30,7 +30,8 @@ class ApprovalServiceTest(BaseFixtureTestCase):
 
     # --- helper ---
     def _pending_adjustment(self, *, stock_in=10, actual=7, creator=None):
-        creator = creator or self.staff_skin
+        # 실사조정은 TEAM_LEADER 이상만 (v0.1.1)
+        creator = creator or self.team_leader_skin
         create_stock_in(user=self.manager, managed_item=self.mi, quantity=stock_in)
         return request_adjustment(
             user=creator,
@@ -84,12 +85,12 @@ class ApprovalServiceTest(BaseFixtureTestCase):
 
     def test_withdraw_adjustment(self):
         """9.7 adjustment 철회 테스트 + canceled_by/canceled_at 기록"""
-        tx = self._pending_adjustment(stock_in=10, actual=7, creator=self.staff_skin)
+        tx = self._pending_adjustment(stock_in=10, actual=7, creator=self.team_leader_skin)
         canceled = withdraw_pending_transaction(
-            user=self.staff_skin, transaction_obj=tx, cancel_reason="요청 취소"
+            user=self.team_leader_skin, transaction_obj=tx, cancel_reason="요청 취소"
         )
         self.assertEqual(canceled.status, TransactionStatus.CANCELED)
-        self.assertEqual(canceled.canceled_by, self.staff_skin)
+        self.assertEqual(canceled.canceled_by, self.team_leader_skin)
         self.assertIsNotNone(canceled.canceled_at)
         self.assertEqual(get_current_stock(self.mi), Decimal("10"))
 

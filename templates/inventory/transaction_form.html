@@ -4,6 +4,9 @@
 <h1>{{ page_title }}</h1>
 
 <div class="card form-card">
+  {% if adjustment_mode %}
+  <div id="mode-guide" class="msg info" hidden></div>
+  {% endif %}
   <form method="post">
     {% csrf_token %}
     {{ form.as_p }}
@@ -109,12 +112,30 @@
   var info = document.getElementById("mi-info");
   var qtyInput = document.getElementById("id_quantity");
   var projected = info && info.getAttribute("data-projected") === "1";
+
+  // 실사조정 통합 화면: 모드 안내 + 조정 사유 토글
+  var modeGuide = document.getElementById("mode-guide");
+  var reasonField = document.getElementById("id_reason");
+  var reasonP = reasonField ? reasonField.closest("p") : null;
+  var GUIDE = {
+    initial: "이 품목은 아직 기준 재고가 없습니다. 입력한 수량은 ‘최초 재고 입력’으로 요청됩니다. 승인 전까지 재고현황에는 반영되지 않습니다.",
+    adjustment: "현재 시스템 재고와 실제 재고가 다를 때 실사조정을 요청합니다. 승인 전까지 재고현황에는 반영되지 않습니다."
+  };
+  function updateMode(opt) {
+    if (!modeGuide) return;
+    var mode = opt ? opt.getAttribute("data-mode") : null;
+    if (!opt || !opt.value || !mode) { modeGuide.hidden = true; if (reasonP) reasonP.hidden = false; return; }
+    modeGuide.hidden = false;
+    modeGuide.textContent = GUIDE[mode] || "";
+    if (reasonP) reasonP.hidden = (mode === "initial");  // 최초 재고 입력 모드는 사유 숨김
+  }
   function num(v) { var n = parseFloat(v); return isNaN(n) ? null : n; }
   function fmt(n) { return (Math.round(n * 1000) / 1000).toString(); }
 
   function update() {
-    if (!info) return;
     var opt = selectedOption();
+    updateMode(opt);
+    if (!info) return;
     var stock = opt ? opt.getAttribute("data-stock") : null;
     if (!opt || !opt.value || stock === null) { info.hidden = true; return; }
     info.hidden = false;

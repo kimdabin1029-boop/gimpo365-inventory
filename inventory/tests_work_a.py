@@ -42,27 +42,34 @@ class DisplayNameTest(BaseFixtureTestCase):
         self.assertContains(resp, "김다빈")
 
 
-class InitialCountPermissionViewTest(BaseFixtureTestCase):
-    def test_staff_cannot_access_initial_count(self):
-        """A-3: STAFF 초기재고 입력 URL 직접 접근 차단(403)"""
+class AdjustmentAccessViewTest(BaseFixtureTestCase):
+    def test_staff_cannot_access_adjustment(self):
+        """실사조정 요청(초기재고 포함)은 STAFF 접근 차단(403)"""
         self.client.force_login(self.staff_skin)
         self.assertEqual(
-            self.client.get(reverse("inventory:initial_count_new")).status_code, 403
+            self.client.get(reverse("inventory:adjustment_new")).status_code, 403
         )
 
-    def test_team_leader_can_access_initial_count(self):
+    def test_team_leader_can_access_adjustment(self):
         self.client.force_login(self.team_leader_skin)
         self.assertEqual(
-            self.client.get(reverse("inventory:initial_count_new")).status_code, 200
+            self.client.get(reverse("inventory:adjustment_new")).status_code, 200
         )
 
-    def test_dashboard_hides_initial_count_for_staff(self):
+    def test_initial_count_url_redirects_to_adjustment(self):
+        """기존 초기재고 URL 은 실사조정 요청으로 redirect"""
+        self.client.force_login(self.team_leader_skin)
+        resp = self.client.get(reverse("inventory:initial_count_new"))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(reverse("inventory:adjustment_new"), resp.url)
+
+    def test_dashboard_hides_adjustment_for_staff(self):
         self.client.force_login(self.staff_skin)
         resp = self.client.get(reverse("inventory:dashboard"))
-        self.assertNotContains(resp, reverse("inventory:initial_count_new"))
+        self.assertNotContains(resp, reverse("inventory:adjustment_new"))
         self.client.force_login(self.team_leader_skin)
         resp = self.client.get(reverse("inventory:dashboard"))
-        self.assertContains(resp, reverse("inventory:initial_count_new"))
+        self.assertContains(resp, reverse("inventory:adjustment_new"))
 
 
 class CancelBasisTest(BaseFixtureTestCase):

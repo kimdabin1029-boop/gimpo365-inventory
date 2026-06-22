@@ -2,15 +2,15 @@
 {% load inventory_extras %}
 {% block title %}실사조정 내역 · gimpo365-inventory{% endblock %}
 {% block content %}
-<h1>실사조정 내역</h1>
-<p class="muted">실사조정 요청의 처리 결과와 사유를 확인합니다.</p>
+<h1>실사조정 / 최초 재고 입력 내역</h1>
+<p class="muted">최초 재고 입력·실사조정 요청의 처리 결과와 사유를 확인합니다.</p>
 
 <div class="table-wrap">
 <table class="data adjustment-table">
   <thead>
     <tr>
-      <th>거래일자</th><th class="col-name">품목명</th><th class="col-dept">부서</th>
-      <th class="num">시스템 수량</th><th class="num">실제 수량</th><th class="num">차이</th>
+      <th>거래일자</th><th>거래유형</th><th class="col-name">품목명</th><th class="col-dept">부서</th>
+      <th class="num">시스템 수량</th><th class="num">실제/입력 수량</th><th class="num">반영 수량</th>
       <th>상태</th><th>요청자</th><th>승인/반려자</th><th>요청 사유</th><th>검토 메모</th><th>취소 사유</th>
     </tr>
   </thead>
@@ -18,10 +18,16 @@
     {% for t in transactions %}
     <tr>
       <td title="입력일시: {{ t.created_at|date:'Y-m-d H:i' }}">{{ t.occurred_at|date:"Y-m-d" }}</td>
+      <td>{{ t.get_transaction_type_display }}</td>
       <td class="col-name">{{ t.managed_item.item.name }}</td>
       <td class="col-dept">{{ t.managed_item.department.name }}</td>
-      <td class="num">{{ t.expected_quantity|qty }}</td>
-      <td class="num">{{ t.actual_quantity|qty }}</td>
+      {% if t.transaction_type == "INITIAL_COUNT" %}
+        <td class="num">기준 없음</td>
+        <td class="num">{{ t.quantity_input|qty }}</td>
+      {% else %}
+        <td class="num">{{ t.expected_quantity|qty }}</td>
+        <td class="num">{{ t.actual_quantity|qty }}</td>
+      {% endif %}
       <td class="num">{% if t.quantity_delta > 0 %}+{% endif %}{{ t.quantity_delta|qty }}</td>
       <td>{{ t.get_status_display }}</td>
       <td>{{ t.created_by.display_name }}</td>
@@ -31,7 +37,7 @@
       <td>{{ t.cancel_reason }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="12">실사조정 내역이 없습니다.</td></tr>
+    <tr><td colspan="13">내역이 없습니다.</td></tr>
     {% endfor %}
   </tbody>
 </table>

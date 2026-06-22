@@ -4,6 +4,7 @@
 """
 
 from django.urls import path
+from django.views.generic import RedirectView
 
 from inventory.views import (
     AdjustmentRequestListView,
@@ -11,7 +12,6 @@ from inventory.views import (
     ApproveTransactionView,
     BulkApproveInitialCountsView,
     CancelTransactionView,
-    InitialCountRequestView,
     InventoryDashboardView,
     LowStockListView,
     PendingTransactionListView,
@@ -35,9 +35,10 @@ urlpatterns = [
     path("in/new/", StockInCreateView.as_view(), name="stock_in_new"),
     path("out/new/", StockOutCreateView.as_view(), name="stock_out_new"),
     path("adjustment/new/", AdjustmentRequestView.as_view(), name="adjustment_new"),
+    # 초기재고 입력은 실사조정 요청으로 통합 → 기존 URL 은 redirect (v0.1.1)
     path(
         "initial-count/new/",
-        InitialCountRequestView.as_view(),
+        RedirectView.as_view(pattern_name="inventory:adjustment_new", permanent=False),
         name="initial_count_new",
     ),
     # 상태 변경 화면 (TASK 17)

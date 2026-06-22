@@ -92,7 +92,7 @@ class CancelButtonVisibilityTest(BaseFixtureTestCase):
         """18.2 승인된 ADJUSTMENT 취소 버튼 없음 (IN 거래는 표시)"""
         in_tx = create_stock_in(user=self.manager, managed_item=self.mi, quantity=10)
         adj = request_adjustment(
-            user=self.staff_skin,
+            user=self.team_leader_skin,
             managed_item=self.mi,
             actual_quantity=7,
             reason="실사",
@@ -116,8 +116,8 @@ class CreateViewTest(BaseFixtureTestCase):
 
     def test_get_renders_form(self):
         self.client.force_login(self.staff_skin)
-        # 초기재고는 TEAM_LEADER 이상만 (A-3) → STAFF 접근 폼에서 제외(별도 테스트로 커버)
-        for name in ("stock_in_new", "stock_out_new", "adjustment_new"):
+        # 실사조정 요청(초기재고 포함)은 TEAM_LEADER 이상만 → STAFF 접근 폼에서 제외(별도 테스트로 커버)
+        for name in ("stock_in_new", "stock_out_new"):
             resp = self.client.get(reverse(f"inventory:{name}"))
             self.assertEqual(resp.status_code, 200)
 

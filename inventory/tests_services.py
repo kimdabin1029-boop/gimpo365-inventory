@@ -168,7 +168,7 @@ class AdjustmentServiceTest(BaseFixtureTestCase):
         """9.1 request_adjustment 성공 + 실사조정 delta 정합성 테스트"""
         self._set_stock_7()
         tx = request_adjustment(
-            user=self.staff_skin,
+            user=self.team_leader_skin,
             managed_item=self.mi,
             actual_quantity=5,
             reason="실사 결과 차이",
@@ -184,7 +184,7 @@ class AdjustmentServiceTest(BaseFixtureTestCase):
         """9.2 adjustment reason 필수 테스트"""
         with self.assertRaises(InventoryError):
             request_adjustment(
-                user=self.staff_skin,
+                user=self.team_leader_skin,
                 managed_item=self.mi,
                 actual_quantity=5,
                 reason="   ",
@@ -194,10 +194,20 @@ class AdjustmentServiceTest(BaseFixtureTestCase):
         """9.3 actual_quantity 음수 차단 테스트"""
         with self.assertRaises(InvalidQuantityError):
             request_adjustment(
-                user=self.staff_skin,
+                user=self.team_leader_skin,
                 managed_item=self.mi,
                 actual_quantity=-1,
                 reason="음수 테스트",
+            )
+
+    def test_staff_adjustment_blocked(self):
+        """실사조정 요청은 STAFF 불가 (TEAM_LEADER 이상)"""
+        from inventory.exceptions import PermissionDeniedError
+
+        with self.assertRaises(PermissionDeniedError):
+            request_adjustment(
+                user=self.staff_skin, managed_item=self.mi,
+                actual_quantity=5, reason="실물 재고 부족",
             )
 
 

@@ -92,7 +92,7 @@ class BulkApproveInitialCountsTest(BaseFixtureTestCase):
         """13.5 ADJUSTMENT는 bulk approve 대상 제외"""
         create_stock_in(user=self.manager, managed_item=self.mi_a, quantity=10)
         adj = request_adjustment(
-            user=self.staff_skin,
+            user=self.team_leader_skin,
             managed_item=self.mi_a,
             actual_quantity=7,
             reason="실사",

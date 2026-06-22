@@ -11,6 +11,7 @@
 from datetime import datetime, time
 
 from django import forms
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from accounts.models import Role
@@ -86,6 +87,8 @@ class ManagedItemSelect(forms.Select):
                     "data-unit": data["unit"],
                     "data-name": data["name"],
                     "data-dept": data["dept"],
+                    # mode: 승인 초기재고 없으면 "initial"(최초 재고 입력), 있으면 "adjustment"
+                    "data-mode": data["mode"],
                 }
             )
         return option
@@ -137,6 +140,16 @@ def _set_managed_item_with_stock(form, user):
     user-aware 유지: get_accessible_managed_items 범위(권한 밖 미노출)를 그대로 따른다.
     """
     qs = get_managed_items_with_current_stock(user).filter(is_active=True)
+    # 각 관리품목에 승인된 최초 재고(INITIAL_COUNT) 존재 여부 주석 (N+1 방지)
+    qs = qs.annotate(
+        _has_initial=Exists(
+            StockTransaction.objects.filter(
+                managed_item=OuterRef("pk"),
+                transaction_type=TransactionType.INITIAL_COUNT,
+                status=TransactionStatus.APPROVED,
+            )
+        )
+    )
     field = form.fields["managed_item"]
     field.queryset = qs
     stock_map = {}
@@ -148,6 +161,7 @@ def _set_managed_item_with_stock(form, user):
             "unit": mi.get_unit_display(),
             "name": mi.item.name,
             "dept": mi.department.name,
+            "mode": "adjustment" if mi._has_initial else "initial",
         }
     field.widget.stock_map = stock_map
 
@@ -241,7 +255,11 @@ class StockOutForm(forms.Form):
 
 
 class AdjustmentRequestForm(forms.Form):
-    """실사조정 요청 Form. 실사일자(날짜) 입력. (PRODUCT_SPEC §10.10)"""
+    """실사조정 요청 Form (최초 재고 입력 / 실사조정 통합). (v0.1.1 / PRODUCT_SPEC §10.10)
+
+    선택한 관리품목에 승인된 최초 재고가 없으면 '최초 재고 입력'(INITIAL_COUNT),
+    있으면 '실사조정'(ADJUSTMENT) 으로 처리한다. 실사조정 모드에서만 reason 이 필수다.
+    """
 
     managed_item = ManagedItemChoiceField(
         label="관리품목", queryset=StockTransaction.objects.none()
@@ -249,11 +267,12 @@ class AdjustmentRequestForm(forms.Form):
     actual_quantity = forms.DecimalField(
         label="실제 수량", max_digits=12, decimal_places=3, widget=_qty_widget(allow_zero=True)
     )
-    occurred_at = _trade_date_field("실사일자")
+    occurred_at = _trade_date_field("기준일자")
     reason = forms.ChoiceField(
         label="조정 사유",
         choices=ADJUSTMENT_REASON_CHOICES,
-        help_text="‘기타’ 선택 시 상세 내용을 메모에 입력하세요.",
+        required=False,  # 최초 재고 입력 모드에서는 불필요 → clean 에서 조건부 검증
+        help_text="실사조정 시 사유를 선택하세요. ‘기타’는 상세 내용을 메모에 입력합니다.",
     )
     memo = forms.CharField(
         label="메모", required=False, widget=forms.Textarea(attrs={"rows": 2})
@@ -273,7 +292,21 @@ class AdjustmentRequestForm(forms.Form):
         return value
 
     def clean_occurred_at(self):
-        return _clean_trade_date(self.cleaned_data.get("occurred_at"), "실사일자")
+        return _clean_trade_date(self.cleaned_data.get("occurred_at"), "기준일자")
+
+    def clean(self):
+        cleaned = super().clean()
+        mi = cleaned.get("managed_item")
+        # 실사조정 모드(승인된 최초 재고 존재)일 때만 사유 필수
+        if mi is not None and getattr(mi, "_has_initial", None) is None:
+            from inventory.selectors import has_approved_initial_count
+
+            is_adjustment = has_approved_initial_count(mi)
+        else:
+            is_adjustment = bool(getattr(mi, "_has_initial", False)) if mi else False
+        if is_adjustment and not (cleaned.get("reason") or "").strip():
+            self.add_error("reason", "실사조정 시 조정 사유는 필수입니다.")
+        return cleaned
 
 
 class InitialCountForm(forms.Form):

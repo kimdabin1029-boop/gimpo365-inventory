@@ -142,7 +142,7 @@ class CancelTransactionTest(BaseFixtureTestCase):
         """12.10 ADJUSTMENT 취소 차단 테스트"""
         self._in(user=self.manager, mi=self.mi_skin, qty=10)
         adj = request_adjustment(
-            user=self.staff_skin,
+            user=self.team_leader_skin,
             managed_item=self.mi_skin,
             actual_quantity=7,
             reason="실사",

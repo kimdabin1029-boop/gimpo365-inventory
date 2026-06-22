@@ -35,7 +35,7 @@ class Unit(models.TextChoices):
 
 
 class TransactionType(models.TextChoices):
-    INITIAL_COUNT = "INITIAL_COUNT", "초기재고"
+    INITIAL_COUNT = "INITIAL_COUNT", "최초 재고 입력"
     IN = "IN", "입고"
     OUT_USE = "OUT_USE", "사용"
     OUT_DISCARD = "OUT_DISCARD", "폐기"

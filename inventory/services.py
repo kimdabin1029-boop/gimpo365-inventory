@@ -195,12 +195,15 @@ def request_adjustment(
     occurred_at=None,
     memo="",
 ):
-    """실사조정 요청. STAFF 이상, 생성 시 PENDING. (TECH_SPEC §11 / PRODUCT_SPEC §5.4)
+    """실사조정 요청. TEAM_LEADER 이상, 생성 시 PENDING. (v0.1.1 / TECH_SPEC §11)
 
     expected_quantity = 요청 시점 현재고
     quantity_delta = actual_quantity - expected_quantity
     reason 필수.
     """
+    # 실사조정/최초 재고 입력 요청은 TEAM_LEADER 이상만 (STAFF 차단)
+    if not has_role_at_least(user, Role.TEAM_LEADER):
+        raise PermissionDeniedError("실사조정 요청 권한이 없습니다. (TEAM_LEADER 이상)")
     _check_access(user, managed_item)
 
     if not reason or not str(reason).strip():

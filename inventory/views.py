@@ -19,7 +19,6 @@ from inventory.forms import (
     ApproveTransactionForm,
     BulkApproveInitialCountsForm,
     CancelTransactionForm,
-    InitialCountForm,
     PendingTransactionFilterForm,
     RejectTransactionForm,
     StockFilterForm,
@@ -34,6 +33,7 @@ from inventory.selectors import (
     get_managed_items_with_current_stock,
     get_pending_transactions,
     get_transactions,
+    has_approved_initial_count,
 )
 from inventory.services import (
     approve_transaction,
@@ -69,8 +69,8 @@ class InventoryDashboardView(LoginRequiredMixin, TemplateView):
         )
 
         ctx["is_manager"] = is_manager_or_above(user)
-        # 초기재고 입력은 TEAM_LEADER 이상만 (A-3)
-        ctx["can_initial_count"] = has_role_at_least(user, Role.TEAM_LEADER)
+        # 실사조정 요청(최초 재고 입력 포함)은 TEAM_LEADER 이상만 (v0.1.1)
+        ctx["can_request_adjustment"] = has_role_at_least(user, Role.TEAM_LEADER)
         if ctx["is_manager"]:
             ctx["pending_count"] = get_pending_transactions(user).count()
         return ctx
@@ -223,10 +223,14 @@ class AdjustmentRequestListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         user = self.request.user
+        # 최초 재고 입력(INITIAL_COUNT) + 실사조정(ADJUSTMENT) 을 함께 보여준다.
         qs = get_transactions(user).filter(
-            transaction_type=TransactionType.ADJUSTMENT
+            transaction_type__in=[
+                TransactionType.INITIAL_COUNT,
+                TransactionType.ADJUSTMENT,
+            ]
         )
-        # STAFF 는 본인이 요청한 것만
+        # STAFF 는 본인이 요청한 것만 (현재 STAFF 는 생성 권한 없음)
         if not has_role_at_least(user, Role.TEAM_LEADER):
             qs = qs.filter(created_by=user)
         return qs
@@ -255,6 +259,8 @@ class _ServiceCreateView(LoginRequiredMixin, View):
 
     # 출고 화면에서만 "출고 후 예상 재고" 표시
     show_projected = False
+    # 실사조정 통합 화면에서만 모드 안내(최초 재고 입력/실사조정) 표시
+    adjustment_mode = False
 
     def _render(self, form):
         return render(
@@ -264,6 +270,7 @@ class _ServiceCreateView(LoginRequiredMixin, View):
                 "form": form,
                 "page_title": self.page_title,
                 "show_projected": self.show_projected,
+                "adjustment_mode": self.adjustment_mode,
             },
         )
 
@@ -323,42 +330,42 @@ class StockOutCreateView(_ServiceCreateView):
 
 
 class AdjustmentRequestView(_ServiceCreateView):
+    """실사조정 요청 (최초 재고 입력 / 실사조정 통합). TEAM_LEADER 이상.
+
+    선택 품목에 승인된 최초 재고가 없으면 request_initial_count(INITIAL_COUNT),
+    있으면 request_adjustment(ADJUSTMENT) 로 라우팅한다. (내부 거래유형 유지)
+    """
+
     form_class = AdjustmentRequestForm
     page_title = "실사조정 요청"
-    success_message = "실사조정 요청이 등록되었습니다. (승인 대기)"
-
-    def perform(self, user, cd):
-        request_adjustment(
-            user=user,
-            managed_item=cd["managed_item"],
-            actual_quantity=cd["actual_quantity"],
-            reason=cd["reason"],
-            occurred_at=cd.get("occurred_at"),
-            memo=cd.get("memo", ""),
-        )
-
-
-class InitialCountRequestView(_ServiceCreateView):
-    form_class = InitialCountForm
-    page_title = "초기재고 입력"
-    success_message = "초기재고가 등록되었습니다."
+    adjustment_mode = True  # 템플릿 모드 안내 활성
 
     def dispatch(self, request, *args, **kwargs):
-        # 초기재고 입력은 TEAM_LEADER 이상만 (URL 직접 접근 차단). (A-3)
         if request.user.is_authenticated and not has_role_at_least(
             request.user, Role.TEAM_LEADER
         ):
-            raise PermissionDenied("초기재고 입력 권한이 없습니다. (TEAM_LEADER 이상)")
+            raise PermissionDenied("실사조정 요청 권한이 없습니다. (TEAM_LEADER 이상)")
         return super().dispatch(request, *args, **kwargs)
 
     def perform(self, user, cd):
-        request_initial_count(
-            user=user,
-            managed_item=cd["managed_item"],
-            quantity=cd["quantity"],
-            occurred_at=cd.get("occurred_at"),
-            memo=cd.get("memo", ""),
-        )
+        mi = cd["managed_item"]
+        if has_approved_initial_count(mi):
+            request_adjustment(
+                user=user, managed_item=mi,
+                actual_quantity=cd["actual_quantity"], reason=cd["reason"],
+                occurred_at=cd.get("occurred_at"), memo=cd.get("memo", ""),
+            )
+            self.success_message = "실사조정 요청이 등록되었습니다. (승인 대기)"
+        else:
+            request_initial_count(
+                user=user, managed_item=mi, quantity=cd["actual_quantity"],
+                occurred_at=cd.get("occurred_at"), memo=cd.get("memo", ""),
+            )
+            self.success_message = "최초 재고 입력이 등록되었습니다."
+
+
+# 별도 '초기재고 입력' 화면은 실사조정 요청(AdjustmentRequestView)으로 통합되었다. (v0.1.1)
+# 기존 URL(initial_count_new)은 urls.py 에서 실사조정 요청으로 redirect 한다.
 
 
 # ---------------------------------------------------------------------------

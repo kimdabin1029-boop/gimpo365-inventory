@@ -1096,6 +1096,10 @@ StockTransaction Admin에서 add/delete를 허용하지 마라.
 - 실사조정 사유 → 고정 선택값 드롭다운("기타"는 메모 안내)
 - 관리품목 검색 필터(외부 라이브러리 없음, user-aware 옵션만 필터)
 - 계정: 개인별 계정 원칙/공유 금지/비활성화 운영 문서화, 직원 비밀번호 변경 화면(/accounts/password-change/)
+- 권한: 실사조정/최초 재고 입력 요청은 TEAM_LEADER 이상(STAFF 차단). 승인/반려는 MANAGER 이상 유지
+- 흐름: 별도 '초기재고 입력' 화면 제거 → '실사조정 요청'으로 통합.
+  선택 품목에 승인된 최초 재고가 없으면 INITIAL_COUNT(최초 재고 입력), 있으면 ADJUSTMENT(실사조정)로 자동 분기.
+  내부 거래유형(INITIAL_COUNT/ADJUSTMENT)과 service/유일성/현재고 계산 원칙은 그대로 유지.
 ```
 
 ## 7. v0.2 후보 (설계 메모, 미구현)
