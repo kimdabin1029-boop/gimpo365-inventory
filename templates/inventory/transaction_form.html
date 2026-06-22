@@ -18,12 +18,12 @@
   후보 리스트에는 최소 정보(품목명·부서)만, 상세 수치는 이 패널에서만 표시한다. (중복 제거)
   {% endcomment %}
   <div id="mi-info" class="mi-info" data-projected="{{ show_projected|yesno:'1,0' }}" hidden>
-    <h2 id="mi-title">선택 품목 정보</h2>
+    <h2>선택 품목 정보</h2>
+    <p class="mi-line"><strong id="mi-title">-</strong></p>
     <p class="mi-line">
-      현재고 <strong id="mi-stock">-</strong>
-      · 최소재고 <strong id="mi-min">-</strong>
+      단위 <strong id="mi-unit2">-</strong>
+      · 현재고 <strong id="mi-stock">-</strong>
       · 보관장소 <strong id="mi-loc">-</strong>
-      · 단위 <strong id="mi-unit2">-</strong>
     </p>
     <p id="mi-projected-row" class="mi-line" hidden>
       출고 후 예상 재고: <strong id="mi-projected">-</strong>
@@ -60,12 +60,19 @@
 
   // 현재 선택값이 있으면 입력창에 반영
   function selectedOption() { return select.options[select.selectedIndex]; }
-  function labelOf(opt) {
-    var name = opt.getAttribute("data-name") || opt.text;
-    var dept = opt.getAttribute("data-dept") || "";
-    return dept ? (name + " · " + dept) : name;
+  function nameOf(opt) { return opt.getAttribute("data-name") || opt.text; }
+  function deptOf(opt) { return opt.getAttribute("data-dept") || ""; }
+  function unitOf(opt) { return opt.getAttribute("data-unit") || ""; }
+  // 후보 라벨: 품목명 · 부서 · 단위 (1-3)
+  function candLabel(opt) {
+    return [nameOf(opt), deptOf(opt), unitOf(opt)].filter(Boolean).join(" · ");
   }
-  if (select.value) input.value = labelOf(selectedOption());
+  // 패널 제목: 품목명 / 부서 (1-4)
+  function titleLabel(opt) {
+    var d = deptOf(opt);
+    return d ? (nameOf(opt) + " / " + d) : nameOf(opt);
+  }
+  if (select.value) input.value = candLabel(selectedOption());
 
   function render(q) {
     list.innerHTML = "";
@@ -79,12 +86,12 @@
       ).toLowerCase();
       if (q && hay.indexOf(q) === -1) return;
       var li = document.createElement("li");
-      li.textContent = labelOf(opt);          // 후보: 품목명 · 부서 (최소 정보)
+      li.textContent = candLabel(opt);          // 후보: 품목명 · 부서 · 단위
       li.dataset.value = opt.value;
       li.addEventListener("mousedown", function (e) {
         e.preventDefault();
         select.value = opt.value;
-        input.value = labelOf(opt);
+        input.value = candLabel(opt);
         list.hidden = true;
         select.dispatchEvent(new Event("change"));
       });
@@ -111,11 +118,10 @@
     var stock = opt ? opt.getAttribute("data-stock") : null;
     if (!opt || !opt.value || stock === null) { info.hidden = true; return; }
     info.hidden = false;
-    document.getElementById("mi-title").textContent = labelOf(opt);
+    document.getElementById("mi-title").textContent = titleLabel(opt);
     document.getElementById("mi-stock").textContent = stock;
-    document.getElementById("mi-min").textContent = opt.getAttribute("data-min") || "-";
-    document.getElementById("mi-loc").textContent = opt.getAttribute("data-loc") || "-";
-    document.getElementById("mi-unit2").textContent = opt.getAttribute("data-unit") || "-";
+    document.getElementById("mi-loc").textContent = opt.getAttribute("data-loc") || "미지정";
+    document.getElementById("mi-unit2").textContent = unitOf(opt) || "-";
     var prow = document.getElementById("mi-projected-row");
     if (projected && qtyInput && prow) {
       var s = num(stock), q = num(qtyInput.value);

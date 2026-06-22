@@ -9,24 +9,24 @@
 <table class="data adjustment-table">
   <thead>
     <tr>
-      <th>거래일자</th><th>입력일시</th><th class="col-dept">부서</th><th class="col-name">품목명</th>
+      <th>거래일자</th><th class="col-name">품목명</th><th class="col-dept">부서</th>
       <th class="num">시스템 수량</th><th class="num">실제 수량</th><th class="num">차이</th>
-      <th>요청 사유</th><th>상태</th><th>승인/반려자</th><th>검토 메모</th><th>취소 사유</th>
+      <th>상태</th><th>요청자</th><th>승인/반려자</th><th>요청 사유</th><th>검토 메모</th><th>취소 사유</th>
     </tr>
   </thead>
   <tbody>
     {% for t in transactions %}
     <tr>
-      <td>{{ t.occurred_at|date:"Y-m-d H:i" }}</td>
-      <td>{{ t.created_at|date:"Y-m-d H:i" }}</td>
-      <td class="col-dept">{{ t.managed_item.department.name }}</td>
+      <td title="입력일시: {{ t.created_at|date:'Y-m-d H:i' }}">{{ t.occurred_at|date:"Y-m-d" }}</td>
       <td class="col-name">{{ t.managed_item.item.name }}</td>
+      <td class="col-dept">{{ t.managed_item.department.name }}</td>
       <td class="num">{{ t.expected_quantity|qty }}</td>
       <td class="num">{{ t.actual_quantity|qty }}</td>
-      <td class="num">{{ t.quantity_delta|qty }}</td>
-      <td>{{ t.reason }}</td>
+      <td class="num">{% if t.quantity_delta > 0 %}+{% endif %}{{ t.quantity_delta|qty }}</td>
       <td>{{ t.get_status_display }}</td>
-      <td>{{ t.approved_by|default:"-" }}</td>
+      <td>{{ t.created_by.display_name }}</td>
+      <td>{% if t.approved_by %}{{ t.approved_by.display_name }}{% else %}-{% endif %}</td>
+      <td>{{ t.reason }}</td>
       <td>{{ t.review_note }}</td>
       <td>{{ t.cancel_reason }}</td>
     </tr>

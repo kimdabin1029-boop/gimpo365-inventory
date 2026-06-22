@@ -6,13 +6,17 @@
 
 <div class="card">
   <dl class="tx-detail">
-    <dt>거래 번호</dt><dd>#{{ tx.pk }}</dd>
-    <dt>관리품목</dt><dd>{{ tx.managed_item.department.name }} / {{ tx.managed_item.item.name }}</dd>
+    <dt>거래일자</dt><dd>{{ tx.occurred_at|date:"Y-m-d" }}</dd>
     <dt>거래유형</dt><dd>{{ tx.get_transaction_type_display }}</dd>
-    <dt>현재 상태</dt><dd>{{ tx.get_status_display }}</dd>
-    <dt>입력 수량</dt><dd>{{ tx.quantity_input|qty }}</dd>
-    <dt>증감값</dt><dd>{{ tx.quantity_delta|qty }}</dd>
-    {% if tx.expected_quantity is not None %}<dt>시스템 기준 수량</dt><dd>{{ tx.expected_quantity|qty }}</dd>{% endif %}
+    <dt>품목명</dt><dd>{{ tx.managed_item.item.name }}</dd>
+    <dt>부서</dt><dd>{{ tx.managed_item.department.name }}</dd>
+    <dt>증감</dt><dd>{% if tx.quantity_delta > 0 %}+{% endif %}{{ tx.quantity_delta|qty }} {{ tx.managed_item.get_unit_display }}</dd>
+    <dt>상태</dt><dd>{{ tx.get_status_display }}</dd>
+    <dt>입력자</dt><dd>{{ tx.created_by.display_name }}</dd>
+    {% if tx.expected_quantity is not None %}
+      <dt>시스템 기준 수량</dt><dd>{{ tx.expected_quantity|qty }}</dd>
+      <dt>실제 수량</dt><dd>{{ tx.actual_quantity|qty }}</dd>
+    {% endif %}
   </dl>
 </div>
 
