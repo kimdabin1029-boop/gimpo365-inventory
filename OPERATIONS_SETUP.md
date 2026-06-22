@@ -201,8 +201,23 @@ python manage.py seed_alpha_inventory --department skin
 python manage.py seed_alpha_inventory --department treatment
 python manage.py seed_alpha_inventory --department all
 
-# 입고/출고 샘플 거래도 생성 (service 사용, [seed] 메모로 idempotent)
+# 입고/출고 샘플 거래(당일)도 생성 (service 사용, [seed] 메모로 idempotent)
 python manage.py seed_alpha_inventory --yes --with-transactions
+
+# 과거 거래이력까지 생성 (기간 필터/과거 취소 제한 확인용)
+python manage.py seed_alpha_inventory --yes --with-transactions --with-history
+```
+
+`--with-history` 설명:
+
+```text
+- 과거 거래(3/10/35/100일 전 입·출고)를 service 로 생성한 뒤,
+  seed 거래의 created_at(입력일시)만 과거값으로 보정한다. (메모 [seed-history])
+- 목적: 오늘/최근 7일/이번 달/최근 3개월 기간 필터, 수동 기간 조회,
+  STAFF 과거 입력 거래 직접 취소 불가(입력일시 기준 당일)를 수동 확인.
+- idempotent: 재실행해도 [seed-history] 메모로 중복 생성하지 않는다.
+- 운영 데이터 생성용이 아니라 DEBUG 전용 알파테스트 데이터다.
+  (created_at 시간 보정은 seed command 내부의 테스트 전용 예외이며, 운영 로직에서는 하지 않는다.)
 ```
 
 특징:

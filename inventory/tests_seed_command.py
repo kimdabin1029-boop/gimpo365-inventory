@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from core.models import Department
 from inventory.models import (
@@ -145,3 +146,56 @@ class SeedAlphaInventoryTest(TestCase):
             ).count(),
             in_count,
         )
+
+
+@override_settings(DEBUG=True)
+class SeedHistoryTest(TestCase):
+    def _history_qs(self):
+        return StockTransaction.objects.filter(memo__startswith="[seed-history]")
+
+    def test_dry_run_creates_no_history(self):
+        _run("--dry-run", "--with-history")
+        self.assertEqual(self._history_qs().count(), 0)
+
+    def test_history_created_and_dated_in_past(self):
+        from django.utils import timezone
+
+        _run("--yes", "--with-history")
+        qs = self._history_qs()
+        self.assertGreater(qs.count(), 0)
+        # 과거 거래의 occurred_at / created_at 이 과거값
+        old = qs.order_by("occurred_at").first()
+        self.assertLess(timezone.localdate(old.occurred_at), timezone.localdate())
+        self.assertLess(timezone.localdate(old.created_at), timezone.localdate())
+
+    def test_history_idempotent(self):
+        _run("--yes", "--with-history")
+        n = self._history_qs().count()
+        _run("--yes", "--with-history")
+        self.assertEqual(self._history_qs().count(), n)
+
+    def test_past_history_not_cancelable_by_staff(self):
+        """과거 created_at(입력일시) seed 거래는 STAFF 직접 취소 불가"""
+        from inventory.permissions import can_cancel_transaction
+
+        _run("--yes", "--with-history")
+        staff = User.objects.get(username="skin_staff_test")
+        past_in = (
+            self._history_qs()
+            .filter(transaction_type=TransactionType.IN, created_by=staff)
+            .first()
+        )
+        self.assertIsNotNone(past_in)
+        self.assertFalse(can_cancel_transaction(staff, past_in))
+
+    def test_history_date_filter(self):
+        """과거 거래가 거래일자 필터(최근 3개월)에 잡히고, 3개월 밖은 제외"""
+        _run("--yes", "--with-history")
+        admin = User.objects.create_superuser(username="hx_admin", password="pw12345!")
+        self.client.force_login(admin)
+        tx35 = self._history_qs().filter(memo="[seed-history] in-35d").first()
+        tx100 = self._history_qs().filter(memo="[seed-history] in-100d").first()
+        r3m = self.client.get(reverse("inventory:transaction_list"), {"range": "3m"})
+        txs = list(r3m.context["transactions"])
+        self.assertIn(tx35, txs)       # 35일 전 → 최근 3개월 포함
+        self.assertNotIn(tx100, txs)   # 100일 전 → 제외

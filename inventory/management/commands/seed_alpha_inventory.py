@@ -14,18 +14,39 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
+from datetime import timedelta
+
+from django.utils import timezone
+
 from accounts.models import Role
 from core.models import Department
-from inventory.models import Item, ItemCategory, ManagedItem, Supplier, Unit
+from inventory.models import (
+    Item,
+    ItemCategory,
+    ManagedItem,
+    StockTransaction,
+    Supplier,
+    TransactionType,
+    Unit,
+)
 from inventory.selectors import get_current_stock, has_approved_initial_count
 from inventory.services import (
     create_stock_in,
     create_stock_out,
     request_initial_count,
 )
-from inventory.models import TransactionType
 
 User = get_user_model()
+
+# 과거 거래(--with-history): (태그, 거래유형, 수량, 며칠 전). 같은 날은 IN 을 먼저 둔다.
+HISTORY_ENTRIES = [
+    ("in-3d", TransactionType.IN, 5, 3),
+    ("out-3d", TransactionType.OUT_USE, 2, 3),
+    ("in-10d", TransactionType.IN, 5, 10),
+    ("out-10d", TransactionType.OUT_USE, 2, 10),
+    ("in-35d", TransactionType.IN, 5, 35),    # 지난달
+    ("in-100d", TransactionType.IN, 5, 100),  # 최근 3개월 밖
+]
 
 CONFIRM_WORD = "SEED"
 PASSWORD = "test1234!"  # 알파테스트 계정 공통 비밀번호 (문서에 명시)
@@ -106,7 +127,15 @@ class Command(BaseCommand):
         parser.add_argument(
             "--with-transactions",
             action="store_true",
-            help="입고/출고 샘플 거래도 생성 (service 사용, [seed] 메모로 idempotent)",
+            help="입고/출고 샘플 거래(당일)도 생성 (service 사용, [seed] 메모로 idempotent)",
+        )
+        parser.add_argument(
+            "--with-history",
+            action="store_true",
+            help=(
+                "과거 거래이력도 생성 (기간 필터/과거 취소 제한 확인용). "
+                "service 로 생성 후 seed 거래의 created_at 만 과거값으로 보정한다(DEBUG 전용 예외)."
+            ),
         )
 
     # -- helpers --
@@ -128,9 +157,10 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         selected = self._selected(options["department"])
         with_tx = options["with_transactions"]
+        with_history = options["with_history"]
 
         if dry_run:
-            self._dry_run(selected, with_tx)
+            self._dry_run(selected, with_tx, with_history)
             return
 
         if not options["yes"]:
@@ -146,6 +176,7 @@ class Command(BaseCommand):
             "mi_new": 0, "mi_reuse": 0,
             "initial_created": 0, "initial_skipped": 0,
             "tx_created": 0,
+            "history_created": 0, "history_skipped": 0,
         }
 
         # 1) 부서 (항상 3개 보장)
@@ -237,7 +268,51 @@ class Command(BaseCommand):
                         )
                         c["tx_created"] += 1
 
-        self._print_summary(c, with_tx)
+        # 6) (옵션) 과거 거래이력 — service 로 생성 후 created_at 만 과거값으로 보정
+        if with_history:
+            for dept_key in selected:
+                self._seed_history(dept_key, dept_objs, c)
+
+        self._print_summary(c, with_tx, with_history)
+
+    def _seed_history(self, dept_key, dept_objs, c):
+        """과거 거래이력 생성. service 로 생성한 뒤 seed 거래의 created_at 만 과거로 update.
+
+        (DEBUG 전용 알파테스트 데이터 시간 보정 — 운영 로직에서는 created_at 을 조작하지 않는다.
+         status 직접 변경/StockTransaction 직접 create 는 하지 않는다.)
+        """
+        dept = dept_objs[DEPT_KEY[dept_key]]
+        staff = User.objects.get(username=USERS_BY_DEPT[dept_key][0][0])
+        # 승인 초기재고(=재고 보유)가 있는 첫 관리품목 선택
+        mi = (
+            ManagedItem.objects.filter(department=dept).order_by("id").first()
+        )
+        if not mi or not has_approved_initial_count(mi):
+            return
+
+        for tag, ttype, qty_val, days_ago in HISTORY_ENTRIES:
+            memo = f"[seed-history] {tag}"
+            if mi.stock_transactions.filter(memo=memo).exists():
+                c["history_skipped"] += 1
+                continue
+            occurred = timezone.now() - timedelta(days=days_ago)
+            if ttype == TransactionType.IN:
+                tx = create_stock_in(
+                    user=staff, managed_item=mi, quantity=qty_val,
+                    occurred_at=occurred, memo=memo,
+                )
+            else:
+                if get_current_stock(mi) < qty_val:
+                    c["history_skipped"] += 1
+                    continue
+                tx = create_stock_out(
+                    user=staff, managed_item=mi,
+                    transaction_type=ttype, quantity=qty_val,
+                    occurred_at=occurred, memo=memo,
+                )
+            # seed 전용: created_at(입력일시)도 과거로 보정 → 과거 취소 제한 확인 가능
+            StockTransaction.objects.filter(pk=tx.pk).update(created_at=occurred)
+            c["history_created"] += 1
 
     def _ensure_user(self, username, role, department, c):
         obj, created = User.objects.get_or_create(
@@ -253,7 +328,7 @@ class Command(BaseCommand):
             c["user_reuse"] += 1
         return obj
 
-    def _print_summary(self, c, with_tx):
+    def _print_summary(self, c, with_tx, with_history=False):
         self.stdout.write(self.style.SUCCESS("알파테스트 시드 완료. 요약:"))
         self.stdout.write(f"  - 부서: 신규 {c['dept_new']} / 재사용 {c['dept_reuse']}")
         self.stdout.write(f"  - 사용자: 신규 {c['user_new']} / 재사용 {c['user_reuse']}")
@@ -264,10 +339,14 @@ class Command(BaseCommand):
             f"  - 초기재고: 생성 {c['initial_created']} / 스킵 {c['initial_skipped']}"
         )
         if with_tx:
-            self.stdout.write(f"  - 샘플 거래: 생성 {c['tx_created']}")
+            self.stdout.write(f"  - 샘플 거래(당일): 생성 {c['tx_created']}")
+        if with_history:
+            self.stdout.write(
+                f"  - 과거 거래이력: 생성 {c['history_created']} / 스킵 {c['history_skipped']}"
+            )
         self.stdout.write(f"  - 테스트 계정 비밀번호: {PASSWORD}")
 
-    def _dry_run(self, selected, with_tx):
+    def _dry_run(self, selected, with_tx, with_history=False):
         self.stdout.write("[dry-run] 생성 예정 (실제 생성하지 않음):")
 
         def cnt(model, names, field="name"):
@@ -308,5 +387,10 @@ class Command(BaseCommand):
         self.stdout.write(f"  - 관리품목(부서×품목): {managed_pairs} (이미 존재 시 재사용)")
         self.stdout.write(f"  - 초기재고 생성 예정(최대): {initials} (APPROVED 존재 시 스킵)")
         if with_tx:
-            self.stdout.write(f"  - 샘플 거래: 선택 부서당 입고1/출고1 (이미 [seed] 있으면 스킵)")
+            self.stdout.write(f"  - 샘플 거래(당일): 선택 부서당 입고1/출고1 (이미 [seed] 있으면 스킵)")
+        if with_history:
+            self.stdout.write(
+                f"  - 과거 거래이력: 선택 부서당 최대 {len(HISTORY_ENTRIES)}건 "
+                f"(3/10/35/100일 전, [seed-history] 있으면 스킵)"
+            )
         self.stdout.write(self.style.WARNING("[dry-run] 실제 생성 없음."))
