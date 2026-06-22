@@ -333,6 +333,18 @@ table.data tr.low:hover td { background: #fbe9e7; }
 /* 보조 설명 텍스트 */
 .muted { color: var(--muted); font-size: 0.9rem; margin: -6px 0 14px; }
 
+/* 제작자 크레딧 (작고 은근하게) */
+.app-credit {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 8px 18px 22px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+  opacity: 0.7;
+}
+
 /* ---------- 빠른 기간 필터 ---------- */
 .quick-range {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
