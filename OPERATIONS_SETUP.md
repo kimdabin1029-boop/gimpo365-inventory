@@ -2,8 +2,8 @@
 
 이 문서는 **운영자/운영진**이 새 재고관리 시스템을 처음 세팅하고 운영에 투입하기까지의
 절차를 정리한 가이드다. 가능한 한 비개발자도 따라갈 수 있게 작성했다.
-개발/로컬 실행은 [README.md](README.md), 투입 전 점검은 [MANUAL_QA_CHECKLIST.md](MANUAL_QA_CHECKLIST.md)
-를 참고한다.
+개발/로컬 실행은 [README.md](README.md), 투입 전 점검은 [MANUAL_QA_CHECKLIST.md](MANUAL_QA_CHECKLIST.md),
+**DB 백업/복구는 [DB_OPERATIONS.md](DB_OPERATIONS.md)** 를 참고한다.
 
 > 핵심 원칙: **7월 기준 하드리셋**. 기존 AppSheet/Google Sheets 데이터는 옮기지 않고,
 > 실제 실사 결과로 새 시스템에 초기재고를 입력해 새 기준으로 시작한다. (PRODUCT_SPEC §11)

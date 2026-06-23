@@ -11,6 +11,7 @@
 |---|---|---|
 | **README.md** (이 문서) | 개발자 | 로컬 개발 환경, 실행, 테스트 |
 | [OPERATIONS_SETUP.md](OPERATIONS_SETUP.md) | 운영자 | 운영 서버 초기 세팅·계정·비상 복구·LAN 테스트 |
+| [DB_OPERATIONS.md](DB_OPERATIONS.md) | 운영자 | DB 백업/복구 기본 절차 |
 | [MANUAL_QA_CHECKLIST.md](MANUAL_QA_CHECKLIST.md) | 운영자/QA | 운영 투입 전 수동 점검 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 개발자 | 구조 / 장기 인트라넷 확장 분리 원칙 |
 | [ROADMAP.md](ROADMAP.md) | 전체 | 우선순위 / 단계별 방향 |
