@@ -37,12 +37,12 @@ if (-not (Test-Path $BackupDir)) {
 $pgDump = Join-Path $PgBin "pg_dump.exe"
 $pgRestore = Join-Path $PgBin "pg_restore.exe"
 if (-not (Test-Path $pgDump)) {
-  throw "pg_dump 를 찾을 수 없습니다: $pgDump  (-PgBin 경로를 확인하세요)"
+  throw "pg_dump not found: $pgDump  (check the -PgBin path)"
 }
 
-# 비밀번호: 환경변수에 없으면 안전 입력 (파일/코드에 저장하지 않음)
+# Password: if not set in the environment, prompt securely (never stored in file/code)
 if (-not $env:PGPASSWORD) {
-  $sec = Read-Host "PostgreSQL 비밀번호 ($DbUser)" -AsSecureString
+  $sec = Read-Host "PostgreSQL password ($DbUser)" -AsSecureString
   $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
   $env:PGPASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
 }
@@ -50,25 +50,25 @@ if (-not $env:PGPASSWORD) {
 $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $file = Join-Path $BackupDir "gimpo365_inventory_$stamp.dump"
 
-Write-Host "백업 시작: $DbName ($DbHost`:$DbPort) -> $file"
+Write-Host "Starting backup: $DbName ($DbHost`:$DbPort) -> $file"
 & $pgDump -h $DbHost -p $DbPort -U $DbUser -Fc -f $file $DbName
-if ($LASTEXITCODE -ne 0) { throw "pg_dump 실패 (exit $LASTEXITCODE)" }
+if ($LASTEXITCODE -ne 0) { throw "pg_dump failed (exit $LASTEXITCODE)" }
 
-# 4) 파일 크기 확인
+# 4) Check backup file size
 $item = Get-Item $file
 $sizeMB = [math]::Round($item.Length / 1MB, 2)
-Write-Host ("백업 성공. 크기: {0} MB ({1:N0} bytes)" -f $sizeMB, $item.Length)
-if ($item.Length -eq 0) { throw "백업 파일 크기가 0 입니다. 확인이 필요합니다." }
+Write-Host ("Backup succeeded. Size: {0} MB ({1:N0} bytes)" -f $sizeMB, $item.Length)
+if ($item.Length -eq 0) { throw "Backup file size is 0 bytes. Please verify." }
 
-# 5) pg_restore -l 로 백업 파일 읽기 검증 (실제 복구는 하지 않음)
+# 5) Verify the backup file is readable via pg_restore -l (no actual restore)
 if (Test-Path $pgRestore) {
-  Write-Host "백업 파일 읽기 검증 (pg_restore -l):"
+  Write-Host "Verifying backup file (pg_restore -l):"
   $toc = & $pgRestore -l $file
-  if ($LASTEXITCODE -ne 0) { throw "pg_restore -l 실패: 백업 파일을 읽을 수 없습니다." }
+  if ($LASTEXITCODE -ne 0) { throw "pg_restore -l failed: cannot read the backup file." }
   $entries = ($toc | Where-Object { $_.Trim() -ne "" -and $_ -notmatch '^\s*;' }).Count
-  Write-Host ("읽기 검증 성공. TOC 항목 약 {0}개." -f $entries)
+  Write-Host ("Verification OK. About {0} TOC entries." -f $entries)
 } else {
-  Write-Host "pg_restore 를 찾을 수 없어 읽기 검증은 건너뜁니다: $pgRestore"
+  Write-Host "pg_restore not found, skipping read verification: $pgRestore"
 }
 
-Write-Host "완료: $file"
+Write-Host "Done: $file"
