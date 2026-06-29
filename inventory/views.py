@@ -210,6 +210,29 @@ class TransactionListView(LoginRequiredMixin, ListView):
         return ctx
 
 
+class TransactionDetailView(LoginRequiredMixin, View):
+    """거래 상세. 메모 등 전체 정보를 확인한다. (v0.1.2 알파 피드백)
+
+    조회 전용. 접근 범위는 거래이력(get_transactions)과 동일하게 제한한다.
+    즉 STAFF / TEAM_LEADER 는 본인 부서 거래만, MANAGER / ADMIN 은 전체.
+    권한 밖 거래는 get_object_or_404 로 404 처리되어 범위가 넓어지지 않는다.
+    """
+
+    template_name = "inventory/transaction_detail.html"
+
+    def get(self, request, *args, **kwargs):
+        # get_transactions(user) 가 권한 범위를 그대로 적용하므로 별도 권한검사 불필요.
+        tx = get_object_or_404(get_transactions(request.user), pk=kwargs["pk"])
+        return render(
+            request,
+            self.template_name,
+            {
+                "tx": tx,
+                "can_cancel": can_cancel_transaction(request.user, tx),
+            },
+        )
+
+
 class AdjustmentRequestListView(LoginRequiredMixin, ListView):
     """실사조정 내역 — 요청 처리 결과/사유 확인. (v0.1.1 / PRODUCT_SPEC §10.10)
 

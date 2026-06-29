@@ -125,3 +125,16 @@ $bin = "C:\Program Files\PostgreSQL\17\bin"
 - 비밀번호/.env: 코드·리포지토리에 저장하지 않는다. .env 는 .gitignore 대상이다.
 - 복구 절차는 운영진 문서로만 공유한다.
 ```
+
+## 4. 거래 데이터 정리 (삭제 도구) 주의
+
+```text
+- 운영 중 거래 기록은 물리 삭제하지 않는다. 오입력은 "취소(CANCELED)" 이력으로 남긴다.
+  (입고 오류는 취소 후 재등록 — OPERATIONS_SETUP.md §6A.2)
+- 거래기록 일괄 삭제는 DEBUG 전용 management command 로만 가능하며 운영(DEBUG=False)에서는 거부된다:
+    - reset_alpha_data            : 거래 + 마스터(품목/관리품목/공급업체)까지 삭제 (알파 teardown)
+    - reset_training_transactions : StockTransaction 만 삭제, 공급업체/품목/관리품목/부서/사용자 유지
+                                    (알파/교육용. 기본 dry-run, --yes 시 삭제, --from/--to 기간 필터)
+- 두 명령 모두 실제 운영 중 사용 금지. 상세는 OPERATIONS_SETUP.md §1B 참조.
+- 삭제로 거래기록을 정리하기 전에는 위 1~2 의 백업을 먼저 수행한다.
+```

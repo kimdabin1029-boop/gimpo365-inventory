@@ -132,9 +132,24 @@
   function num(v) { var n = parseFloat(v); return isNaN(n) ? null : n; }
   function fmt(n) { return (Math.round(n * 1000) / 1000).toString(); }
 
+  // 입고 화면: 선택 품목의 기본 공급업체를 공급업체 입력값 초기값으로 자동 선택 (v0.1.2).
+  // 등록된 Supplier 옵션 중에서만 선택되며(자유 텍스트 불가), 사용자는 이후 자유롭게 변경 가능.
+  var supplierSelect = document.getElementById("id_supplier");
+  function syncSupplier(opt) {
+    if (!supplierSelect || !opt) return;
+    var sup = opt.getAttribute("data-supplier");
+    if (sup) {
+      // 해당 공급업체가 옵션으로 존재할 때만 반영 (비활성/미등록이면 건드리지 않음)
+      for (var i = 0; i < supplierSelect.options.length; i++) {
+        if (supplierSelect.options[i].value === sup) { supplierSelect.value = sup; break; }
+      }
+    }
+  }
+
   function update() {
     var opt = selectedOption();
     updateMode(opt);
+    syncSupplier(opt);
     if (!info) return;
     var stock = opt ? opt.getAttribute("data-stock") : null;
     if (!opt || !opt.value || stock === null) { info.hidden = true; return; }

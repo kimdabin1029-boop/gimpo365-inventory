@@ -89,6 +89,9 @@ class ManagedItemSelect(forms.Select):
                     "data-dept": data["dept"],
                     # mode: 승인 초기재고 없으면 "initial"(최초 재고 입력), 있으면 "adjustment"
                     "data-mode": data["mode"],
+                    # 기본 공급업체(있으면) → 입고 화면에서 공급업체 초기값 자동 선택용 (v0.1.2)
+                    "data-supplier": data["supplier"],
+                    "data-supplier-name": data["supplier_name"],
                 }
             )
         return option
@@ -162,6 +165,9 @@ def _set_managed_item_with_stock(form, user):
             "name": mi.item.name,
             "dept": mi.department.name,
             "mode": "adjustment" if mi._has_initial else "initial",
+            # 기본 공급업체 pk/이름 (없으면 빈 문자열) — 입고 화면 초기값 자동 선택용
+            "supplier": str(mi.default_supplier_id or ""),
+            "supplier_name": mi.default_supplier.name if mi.default_supplier_id else "",
         }
     field.widget.stock_map = stock_map
 

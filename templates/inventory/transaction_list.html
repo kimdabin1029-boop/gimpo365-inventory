@@ -45,10 +45,9 @@
         INITIAL_COUNT / ADJUSTMENT 는 can_cancel 이 False 이므로 표시되지 않는다.
         링크는 GET 확인 화면으로만 이동하며, 실제 취소는 그 화면의 POST 에서 수행한다.
         {% endcomment %}
+        <a class="detail-action" id="detail-{{ t.pk }}" href="{% url 'inventory:transaction_detail' t.pk %}">상세</a>
         {% if t.can_cancel %}
-          <a class="cancel-action" id="cancel-{{ t.pk }}" href="{% url 'inventory:cancel' t.pk %}">취소</a>
-        {% else %}
-          -
+          · <a class="cancel-action" id="cancel-{{ t.pk }}" href="{% url 'inventory:cancel' t.pk %}">취소</a>
         {% endif %}
       </td>
     </tr>

@@ -19,6 +19,7 @@ from inventory.views import (
     StockInCreateView,
     StockListView,
     StockOutCreateView,
+    TransactionDetailView,
     TransactionListView,
     WithdrawPendingTransactionView,
 )
@@ -30,6 +31,11 @@ urlpatterns = [
     path("stock/", StockListView.as_view(), name="stock_list"),
     path("low-stock/", LowStockListView.as_view(), name="low_stock"),
     path("transactions/", TransactionListView.as_view(), name="transaction_list"),
+    path(
+        "transactions/<int:pk>/",
+        TransactionDetailView.as_view(),
+        name="transaction_detail",
+    ),
     path("adjustments/", AdjustmentRequestListView.as_view(), name="adjustment_list"),
     # 생성 화면 (TASK 16)
     path("in/new/", StockInCreateView.as_view(), name="stock_in_new"),

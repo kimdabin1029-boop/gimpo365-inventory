@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% load inventory_extras %}
+{% block title %}거래 상세 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>거래 상세</h1>
+
+<div class="card">
+  <dl class="tx-detail">
+    <dt>거래일자</dt><dd>{{ tx.occurred_at|date:"Y-m-d" }}</dd>
+    <dt>입력일시</dt><dd>{{ tx.created_at|date:"Y-m-d H:i" }}</dd>
+    <dt>거래유형</dt><dd>{{ tx.get_transaction_type_display }}</dd>
+    <dt>품목명</dt><dd>{{ tx.managed_item.item.name }}{% if tx.managed_item.item.specification %} <span class="muted">({{ tx.managed_item.item.specification }})</span>{% endif %}</dd>
+    <dt>부서</dt><dd>{{ tx.managed_item.department.name }}</dd>
+    <dt>수량 / 증감</dt>
+    <dd>
+      입력 {{ tx.quantity_input|qty }} {{ tx.managed_item.get_unit_display }}
+      · 증감 {% if tx.quantity_delta > 0 %}+{% endif %}{{ tx.quantity_delta|qty }} {{ tx.managed_item.get_unit_display }}
+    </dd>
+    {% if tx.expected_quantity is not None %}
+      <dt>시스템 기준 수량</dt><dd>{{ tx.expected_quantity|qty }} {{ tx.managed_item.get_unit_display }}</dd>
+      <dt>실제 수량</dt><dd>{{ tx.actual_quantity|qty }} {{ tx.managed_item.get_unit_display }}</dd>
+    {% endif %}
+    <dt>공급업체</dt><dd>{{ tx.supplier.name|default:"-" }}</dd>
+    {% if tx.unit_price is not None %}
+      <dt>입고단가</dt><dd>{{ tx.unit_price|qty }}</dd>
+    {% endif %}
+    {% if tx.expiration_date %}
+      <dt>유통기한</dt><dd>{{ tx.expiration_date|date:"Y-m-d" }}</dd>
+    {% endif %}
+    <dt>상태</dt><dd>{{ tx.get_status_display }}</dd>
+    {% if tx.reason %}
+      <dt>조정 사유</dt><dd>{{ tx.reason }}</dd>
+    {% endif %}
+    <dt>메모</dt>
+    <dd>{% if tx.memo %}{{ tx.memo|linebreaksbr }}{% else %}<span class="muted">메모 없음</span>{% endif %}</dd>
+    <dt>입력자</dt><dd>{{ tx.created_by.display_name }}</dd>
+    <dt>승인자</dt>
+    <dd>
+      {% if tx.approved_by %}
+        {{ tx.approved_by.display_name }}{% if tx.approved_at %} <span class="muted">({{ tx.approved_at|date:"Y-m-d H:i" }})</span>{% endif %}
+      {% else %}-{% endif %}
+    </dd>
+    {% if tx.review_note %}
+      <dt>승인/반려 메모</dt><dd>{{ tx.review_note|linebreaksbr }}</dd>
+    {% endif %}
+    {% if tx.canceled_by or tx.canceled_at or tx.cancel_reason %}
+      <dt>취소자</dt>
+      <dd>{% if tx.canceled_by %}{{ tx.canceled_by.display_name }}{% else %}-{% endif %}</dd>
+      <dt>취소일시</dt>
+      <dd>{% if tx.canceled_at %}{{ tx.canceled_at|date:"Y-m-d H:i" }}{% else %}-{% endif %}</dd>
+      {% if tx.cancel_reason %}
+        <dt>취소 사유</dt><dd>{{ tx.cancel_reason|linebreaksbr }}</dd>
+      {% endif %}
+    {% endif %}
+  </dl>
+
+  <div class="form-actions">
+    <a class="back-link" href="{% url 'inventory:transaction_list' %}">거래이력으로</a>
+    {% if can_cancel %}
+      <a class="cancel-action" href="{% url 'inventory:cancel' tx.pk %}">이 거래 취소</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
