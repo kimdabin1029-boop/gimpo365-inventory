@@ -9,10 +9,13 @@
 </head>
 <body>
   {% include "navbar.html" %}
-  <main class="container">
-    {% include "messages.html" %}
-    {% block content %}{% endblock %}
-  </main>
+  <div class="layout">
+    {% include "sidebar.html" %}
+    <main class="container">
+      {% include "messages.html" %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
   <footer class="app-credit">Built for Gimpo365, by Dabin Kim</footer>
 </body>
 </html>

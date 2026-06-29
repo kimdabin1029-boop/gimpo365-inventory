@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load inventory_extras %}
 {% block title %}대시보드 · gimpo365-inventory{% endblock %}
 {% block content %}
 <h1>재고 대시보드</h1>
@@ -17,6 +18,45 @@
     <div class="num">{{ pending_count }}</div>
     <div class="label">승인 대기 거래</div>
   </div>
+  {% endif %}
+</section>
+
+<section class="lowstock-panel">
+  <h2>최소재고 이하 품목</h2>
+  {% if low_stock_items %}
+    <div class="lowstock-scroll">
+      <table class="data">
+        <thead>
+          <tr>
+            <th class="col-name">품목명</th><th class="col-dept">부서</th>
+            <th class="num">현재고</th><th class="num">최소재고</th><th>상태</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in low_stock_items %}
+          <tr>
+            <td class="col-name">{{ item.item.name }}</td>
+            <td class="col-dept">{{ item.department.name }}</td>
+            <td class="num">{{ item.current_stock|qty }} {{ item.get_unit_display }}</td>
+            <td class="num">{{ item.minimum_stock|qty }} {{ item.get_unit_display }}</td>
+            <td>
+              {% if item.is_out %}
+                <span class="badge out">재고없음</span>
+              {% else %}
+                <span class="badge low">최소재고 이하</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="lowstock-more">
+      {% if low_stock_more > 0 %}외 {{ low_stock_more }}건 더 있음. {% endif %}
+      <a href="{% url 'inventory:stock_list' %}?low_stock=on">재고현황에서 전체보기 →</a>
+    </p>
+  {% else %}
+    <p class="muted">최소재고 이하 품목이 없습니다.</p>
   {% endif %}
 </section>
 

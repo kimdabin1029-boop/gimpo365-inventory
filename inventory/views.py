@@ -61,7 +61,17 @@ class InventoryDashboardView(LoginRequiredMixin, TemplateView):
         user = self.request.user
         today = timezone.localdate()
 
-        ctx["low_stock_count"] = get_low_stock_managed_items(user).count()
+        # 최소재고 이하 품목: 권한 범위 내, 대시보드에는 최대 8건만 노출(나머지는 전체보기).
+        low_stock_qs = get_low_stock_managed_items(user)
+        ctx["low_stock_count"] = low_stock_qs.count()
+        DASHBOARD_LOW_STOCK_LIMIT = 8
+        low_stock_items = list(low_stock_qs[:DASHBOARD_LOW_STOCK_LIMIT])
+        for item in low_stock_items:
+            # 상태: 현재고 0 이하면 "재고없음", 그 외(최소재고 이하)는 "최소재고 이하"
+            item.is_out = item.current_stock <= 0
+        ctx["low_stock_items"] = low_stock_items
+        ctx["low_stock_more"] = ctx["low_stock_count"] - len(low_stock_items)
+
         ctx["my_today_count"] = (
             get_transactions(user)
             .filter(created_by=user, created_at__date=today)

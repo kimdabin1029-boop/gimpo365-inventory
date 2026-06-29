@@ -34,7 +34,7 @@
       {# 입력일시는 백로그/상세 성격 → 메인 표에서는 거래일자 셀 title 로만 확인 #}
       <td title="입력일시: {{ t.created_at|date:'Y-m-d H:i' }}">{{ t.occurred_at|date:"Y-m-d" }}</td>
       <td>{{ t.get_transaction_type_display }}</td>
-      <td class="col-name">{{ t.managed_item.item.name }}</td>
+      <td class="col-name">{{ t.managed_item.item.name }}{% if t.memo %} <span class="memo-icon" title="{{ t.memo }}" aria-label="메모: {{ t.memo }}">📝</span>{% endif %}</td>
       <td class="col-dept">{{ t.managed_item.department.name }}</td>
       <td class="num">{% if t.quantity_delta > 0 %}+{% endif %}{{ t.quantity_delta|qty }} {{ t.managed_item.get_unit_display }}</td>
       <td>{{ t.get_status_display }}</td>

@@ -11,12 +11,37 @@
 
 <section class="card bulk-approve">
   <h2>초기재고 일괄 승인</h2>
-  <form method="post" action="{% url 'inventory:bulk_approve' %}">
+  <form id="bulk-approve-form" method="post" action="{% url 'inventory:bulk_approve' %}">
     {% csrf_token %}
+    <label class="select-all-row">
+      <input type="checkbox" id="bulk-select-all"> 전체 선택 (현재 화면에 보이는 항목)
+    </label>
     {{ bulk_form.as_p }}
     <button type="submit">선택 일괄 승인</button>
   </form>
 </section>
+
+<script>
+(function () {
+  // 전체선택: 일괄 승인 폼에 보이는 체크박스(현재 사용자 권한 범위의 PENDING 초기재고)만 토글한다.
+  // 권한 밖 / 화면에 없는 건은 폼에 렌더되지 않으므로 선택 대상이 아니다.
+  var form = document.getElementById("bulk-approve-form");
+  if (!form) return;
+  var all = document.getElementById("bulk-select-all");
+  function boxes() { return form.querySelectorAll('input[name="selected"]'); }
+  if (all) {
+    all.addEventListener("change", function () {
+      Array.prototype.forEach.call(boxes(), function (cb) { cb.checked = all.checked; });
+    });
+  }
+  // 일괄 처리 전 확인 메시지 (선택 건수 표시)
+  form.addEventListener("submit", function (e) {
+    var n = form.querySelectorAll('input[name="selected"]:checked').length;
+    if (n === 0) { e.preventDefault(); alert("선택한 항목이 없습니다."); return; }
+    if (!confirm("선택한 " + n + "건을 승인하시겠습니까?")) e.preventDefault();
+  });
+})();
+</script>
 
 <div class="table-wrap">
 <table class="data pending-table">
