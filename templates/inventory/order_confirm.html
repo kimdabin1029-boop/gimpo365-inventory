@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load inventory_extras %}
+{% block title %}주문 확정 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>주문 확정</h1>
+
+{% if items %}
+<p class="muted">공급업체별로 주문이 나뉘어 생성됩니다. 주문은 현재고를 변경하지 않습니다.</p>
+
+{% for g in groups %}
+<section class="card">
+  <h2>{{ g.supplier.name|default:"(공급업체 미지정)" }}</h2>
+  <table class="data">
+    <thead>
+      <tr><th class="col-name">품목명</th><th class="col-dept">부서</th><th class="num">수량</th><th>메모</th></tr>
+    </thead>
+    <tbody>
+      {% for ci in g.items %}
+      <tr>
+        <td class="col-name">{{ ci.managed_item.item.name }}</td>
+        <td class="col-dept">{{ ci.managed_item.department.name }}</td>
+        <td class="num">{{ ci.quantity|qty }} {{ ci.managed_item.get_unit_display }}</td>
+        <td>{{ ci.memo|default:"-" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+
+{% if has_missing_supplier %}
+  <p class="msg error">공급업체가 지정되지 않은 항목이 있어 확정할 수 없습니다.
+    <a href="{% url 'inventory:cart' %}">장바구니로 돌아가 공급업체를 선택</a>해주세요.</p>
+{% else %}
+  <div class="card form-card">
+    <form method="post" action="{% url 'inventory:order_confirm' %}">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="form-actions">
+        <button type="submit" onclick="return confirm('공급업체별로 {{ groups|length }}건의 주문을 생성합니다. 확정할까요?');">주문 확정</button>
+        <a class="back-link" href="{% url 'inventory:cart' %}">장바구니로</a>
+      </div>
+    </form>
+  </div>
+{% endif %}
+{% else %}
+<p class="muted">장바구니가 비어 있어 확정할 주문이 없습니다.</p>
+<p><a href="{% url 'inventory:stock_list' %}">재고현황으로 이동 →</a></p>
+{% endif %}
+{% endblock %}

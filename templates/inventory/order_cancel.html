@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}주문 취소 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>주문 취소</h1>
+
+<div class="card">
+  <p>주문 <strong>{{ order.internal_order_no }}</strong> ({{ order.supplier.name }}) 을(를) 취소합니다.</p>
+  <p class="muted">취소해도 현재고는 변경되지 않습니다. 입고완료(RECEIVED) 주문은 취소할 수 없습니다.</p>
+  <form method="post" action="{% url 'inventory:order_cancel' order.pk %}">
+    {% csrf_token %}
+    <p>
+      <label for="reason">취소 사유(선택)</label><br>
+      <textarea id="reason" name="reason" rows="2"></textarea>
+    </p>
+    <div class="form-actions">
+      <button type="submit" class="danger">주문 취소 확정</button>
+      <a class="back-link" href="{% url 'inventory:order_detail' order.pk %}">돌아가기</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -62,6 +62,21 @@
         {% endif %}
       </li>
       {% endif %}
+      <li class="sidebar-sep"><span>주문</span></li>
+      <li>
+        {% if cur == 'cart' or cur == 'order_confirm' %}
+          <a class="sidebar-link active" aria-current="page" href="{% url 'inventory:cart' %}">주문 장바구니</a>
+        {% else %}
+          <a class="sidebar-link" href="{% url 'inventory:cart' %}">주문 장바구니</a>
+        {% endif %}
+      </li>
+      <li>
+        {% if cur == 'order_list' or cur == 'order_detail' or cur == 'order_cancel' %}
+          <a class="sidebar-link active" aria-current="page" href="{% url 'inventory:order_list' %}">주문 목록</a>
+        {% else %}
+          <a class="sidebar-link" href="{% url 'inventory:order_list' %}">주문 목록</a>
+        {% endif %}
+      </li>
     </ul>
   </nav>
 </aside>

@@ -1,0 +1,17 @@
+{% comment %}
+주문 장바구니 담기 (인라인 폼). item(ManagedItem), suppliers(활성 공급업체) 필요. (v0.2.0)
+기본 공급업체가 있으면 초기 선택값으로 둔다(변경 가능, 등록 공급업체만).
+{% endcomment %}
+<form method="post" action="{% url 'inventory:cart_add' %}" class="add-cart-form">
+  {% csrf_token %}
+  <input type="hidden" name="managed_item" value="{{ item.pk }}">
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <input type="number" name="quantity" value="1" min="1" step="1" class="cart-qty" aria-label="주문수량">
+  <select name="supplier" aria-label="공급업체">
+    <option value="">(기본/미지정)</option>
+    {% for s in suppliers %}
+      <option value="{{ s.pk }}" {% if item.default_supplier_id == s.pk %}selected{% endif %}>{{ s.name }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">담기</button>
+</form>

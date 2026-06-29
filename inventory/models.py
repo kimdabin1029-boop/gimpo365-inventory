@@ -322,3 +322,143 @@ class StockTransaction(models.Model):
 
     def __str__(self):
         return f"[{self.status}] {self.transaction_type} {self.quantity_delta} ({self.managed_item})"
+
+
+# ---------------------------------------------------------------------------
+# 주문 (v0.2.0) — 주문 장바구니 / 주문 / 주문품목
+# ---------------------------------------------------------------------------
+# 주의: 주문(Order)은 현재고를 변경하지 않는다. 실제 재고 증가는 입고(StockTransaction IN)
+#       으로만 발생한다. Order 와 StockTransaction 은 별개 도메인이다. (합치지 않음)
+class OrderStatus(models.TextChoices):
+    ORDERED = "ORDERED", "주문완료"
+    RECEIVED = "RECEIVED", "입고완료"
+    CANCELED = "CANCELED", "취소"
+
+
+class OrderCart(models.Model):
+    """사용자별 주문 장바구니. 주문 확정 전 임시 보관 공간. (v0.2.0)"""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="order_cart",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "주문 장바구니"
+        verbose_name_plural = "주문 장바구니"
+
+    def __str__(self):
+        return f"Cart({self.user})"
+
+
+class CartItem(models.Model):
+    """주문 장바구니 항목. (managed_item + supplier) 조합 단위. (v0.2.0)"""
+
+    cart = models.ForeignKey(
+        "inventory.OrderCart", on_delete=models.CASCADE, related_name="items"
+    )
+    managed_item = models.ForeignKey(
+        "inventory.ManagedItem", on_delete=models.PROTECT, related_name="cart_items"
+    )
+    supplier = models.ForeignKey(
+        "inventory.Supplier",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="cart_items",
+    )
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, default=1)
+    memo = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        verbose_name = "장바구니 항목"
+        verbose_name_plural = "장바구니 항목"
+        constraints = [
+            # 같은 장바구니 안에서 (관리품목 + 공급업체) 조합은 1행만.
+            # (supplier 가 NULL 인 경우의 중복 방지는 service 계층에서 함께 처리한다.)
+            UniqueConstraint(
+                fields=["cart", "managed_item", "supplier"],
+                name="uniq_cart_item_mi_supplier",
+            ),
+        ]
+
+    def __str__(self):
+        return f"CartItem({self.managed_item}, {self.quantity})"
+
+
+class Order(models.Model):
+    """주문 1건. 하나의 공급업체에 대한 주문. 현재고에는 영향을 주지 않는다. (v0.2.0)"""
+
+    internal_order_no = models.CharField(
+        max_length=20, unique=True, editable=False
+    )
+    external_order_no = models.CharField(max_length=100, blank=True, default="")
+    supplier = models.ForeignKey(
+        "inventory.Supplier", on_delete=models.PROTECT, related_name="orders"
+    )
+    ordered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="orders",
+    )
+    order_date = models.DateField(default=timezone.localdate)
+    ordered_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(
+        max_length=20, choices=OrderStatus.choices, default=OrderStatus.ORDERED
+    )
+    memo = models.TextField(blank=True, default="")
+    canceled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="canceled_orders",
+    )
+    canceled_at = models.DateTimeField(null=True, blank=True)
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="received_orders",
+    )
+    received_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-ordered_at", "-id"]
+        verbose_name = "주문"
+        verbose_name_plural = "주문"
+
+    def __str__(self):
+        return f"{self.internal_order_no} [{self.status}] {self.supplier}"
+
+
+class OrderItem(models.Model):
+    """주문 품목. 주문 안의 개별 관리품목. (v0.2.0)"""
+
+    order = models.ForeignKey(
+        "inventory.Order", on_delete=models.CASCADE, related_name="items"
+    )
+    managed_item = models.ForeignKey(
+        "inventory.ManagedItem", on_delete=models.PROTECT, related_name="order_items"
+    )
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, default=1)
+    memo = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "주문 품목"
+        verbose_name_plural = "주문 품목"
+
+    def __str__(self):
+        return f"OrderItem({self.managed_item}, {self.quantity})"

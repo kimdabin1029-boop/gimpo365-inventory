@@ -7,13 +7,22 @@ from django.urls import path
 from django.views.generic import RedirectView
 
 from inventory.views import (
+    AddToCartView,
     AdjustmentRequestListView,
     AdjustmentRequestView,
     ApproveTransactionView,
     BulkApproveInitialCountsView,
     CancelTransactionView,
+    CartItemRemoveView,
+    CartItemUpdateView,
+    CartView,
     InventoryDashboardView,
     LowStockListView,
+    OrderCancelView,
+    OrderConfirmView,
+    OrderDetailView,
+    OrderListView,
+    OrderReceiveView,
     PendingTransactionListView,
     RejectTransactionView,
     StockInCreateView,
@@ -66,4 +75,14 @@ urlpatterns = [
         BulkApproveInitialCountsView.as_view(),
         name="bulk_approve",
     ),
+    # 주문 장바구니 / 주문 (v0.2.0)
+    path("cart/", CartView.as_view(), name="cart"),
+    path("cart/add/", AddToCartView.as_view(), name="cart_add"),
+    path("cart/items/<int:pk>/update/", CartItemUpdateView.as_view(), name="cart_item_update"),
+    path("cart/items/<int:pk>/remove/", CartItemRemoveView.as_view(), name="cart_item_remove"),
+    path("cart/confirm/", OrderConfirmView.as_view(), name="order_confirm"),
+    path("orders/", OrderListView.as_view(), name="order_list"),
+    path("orders/<int:pk>/", OrderDetailView.as_view(), name="order_detail"),
+    path("orders/<int:pk>/cancel/", OrderCancelView.as_view(), name="order_cancel"),
+    path("orders/<int:pk>/receive/", OrderReceiveView.as_view(), name="order_receive"),
 ]

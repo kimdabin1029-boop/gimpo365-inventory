@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load inventory_extras %}
+{% block title %}주문 장바구니 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>주문 장바구니</h1>
+<p class="muted">주문할 품목을 담아 한 번에 확정합니다. 주문은 현재고를 바꾸지 않습니다. (실제 재고 증가는 입고 등록)</p>
+
+{% if items %}
+  {% for ci in items %}
+  <div class="card cart-item {% if not ci.supplier_id %}low{% endif %}">
+    <p class="cart-item-head">
+      <strong>{{ ci.managed_item.item.name }}</strong>
+      <span class="muted">／ {{ ci.managed_item.department.name }} ／ {{ ci.managed_item.get_unit_display }}</span>
+    </p>
+    <form method="post" action="{% url 'inventory:cart_item_update' ci.pk %}" class="cart-edit-form">
+      {% csrf_token %}
+      <label>공급업체
+        <select name="supplier" aria-label="공급업체">
+          <option value="">(미지정)</option>
+          {% for s in suppliers %}
+            <option value="{{ s.pk }}" {% if ci.supplier_id == s.pk %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>수량
+        <input type="number" name="quantity" value="{{ ci.quantity|qty }}" min="1" step="1" class="cart-qty">
+      </label>
+      <label>메모
+        <input type="text" name="memo" value="{{ ci.memo }}">
+      </label>
+      <button type="submit">수정</button>
+    </form>
+    <form method="post" action="{% url 'inventory:cart_item_remove' ci.pk %}" class="cart-remove-form">
+      {% csrf_token %}
+      <button type="submit" class="danger">삭제</button>
+    </form>
+  </div>
+  {% endfor %}
+
+  {% if has_missing_supplier %}
+    <p class="msg warning">공급업체가 지정되지 않은 항목이 있습니다. 주문 확정 전 공급업체를 선택해주세요.</p>
+  {% endif %}
+
+  <div class="form-actions">
+    <a class="action-card primary" href="{% url 'inventory:order_confirm' %}">주문 확정으로 →</a>
+    <a class="back-link" href="{% url 'inventory:stock_list' %}">재고현황으로</a>
+  </div>
+{% else %}
+  <p class="muted">장바구니가 비어 있습니다. 재고현황 또는 최소재고 이하 품목에서 담을 수 있습니다.</p>
+  <p><a href="{% url 'inventory:stock_list' %}">재고현황으로 이동 →</a></p>
+{% endif %}
+{% endblock %}

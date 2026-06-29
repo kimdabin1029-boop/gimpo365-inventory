@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load inventory_extras %}
+{% block title %}주문 목록 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>주문 목록</h1>
+
+<p><a class="action-card primary" href="{% url 'inventory:cart' %}">주문 장바구니</a></p>
+
+<div class="table-wrap">
+<table class="data order-table">
+  <thead>
+    <tr>
+      <th>내부 주문번호</th><th>외부 주문번호</th><th>공급업체</th><th>주문일자</th>
+      <th>주문자</th><th>상태</th><th class="num">품목 수</th><th>메모</th><th>작업</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for o in orders %}
+    <tr>
+      <td>{{ o.internal_order_no }}</td>
+      <td>{{ o.external_order_no|default:"-" }}</td>
+      <td>{{ o.supplier.name }}</td>
+      <td>{{ o.order_date|date:"Y-m-d" }}</td>
+      <td>{{ o.ordered_by.display_name }}</td>
+      <td>{{ o.get_status_display }}</td>
+      <td class="num">{{ o.item_count }}</td>
+      <td>{{ o.memo|truncatechars:20|default:"-" }}</td>
+      <td><a href="{% url 'inventory:order_detail' o.pk %}">상세</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="9">주문 내역이 없습니다.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

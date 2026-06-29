@@ -60,6 +60,38 @@
   {% endif %}
 </section>
 
+<section class="lowstock-panel">
+  <h2>미입고 주문</h2>
+  {% if unreceived_orders %}
+    <div class="lowstock-scroll">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>내부 주문번호</th><th>공급업체</th><th>주문일자</th><th>주문자</th><th class="num">품목 수</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for o in unreceived_orders %}
+          <tr>
+            <td><a href="{% url 'inventory:order_detail' o.pk %}">{{ o.internal_order_no }}</a></td>
+            <td>{{ o.supplier.name }}</td>
+            <td>{{ o.order_date|date:"Y-m-d" }}</td>
+            <td>{{ o.ordered_by.display_name }}</td>
+            <td class="num">{{ o.item_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="lowstock-more">
+      {% if unreceived_more > 0 %}외 {{ unreceived_more }}건 더 있음. {% endif %}
+      <a href="{% url 'inventory:order_list' %}">주문 목록으로 →</a>
+    </p>
+  {% else %}
+    <p class="muted">미입고 주문이 없습니다.</p>
+  {% endif %}
+</section>
+
 <h2>작업</h2>
 <section class="action-grid">
   <a class="action-card primary" href="{% url 'inventory:stock_in_new' %}"

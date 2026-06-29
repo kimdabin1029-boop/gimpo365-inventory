@@ -19,12 +19,14 @@ from accounts.permissions import has_role_at_least
 from core.models import Department
 from inventory.models import (
     ItemCategory,
+    ManagedItem,
     StockTransaction,
     Supplier,
     TransactionStatus,
     TransactionType,
 )
 from inventory.selectors import (
+    get_accessible_managed_items,
     get_managed_items_with_current_stock,
     get_pending_transactions,
 )
@@ -461,6 +463,85 @@ class TransactionFilterForm(forms.Form):
             self.fields["department"].queryset = Department.objects.filter(
                 pk=dept_id
             )
+
+
+# ---------------------------------------------------------------------------
+# 주문 Form (v0.2.0)
+# ---------------------------------------------------------------------------
+class AddToCartForm(forms.Form):
+    """장바구니 담기 Form. (v0.2.0)
+
+    managed_item 은 사용자 권한 범위로 제한한다. supplier 는 등록된 공급업체만 선택 가능하며
+    (자유 텍스트 불가), 미선택 시 service 에서 품목 기본 공급업체를 초기값으로 사용한다.
+    """
+
+    managed_item = forms.ModelChoiceField(
+        queryset=ManagedItem.objects.none(), widget=forms.HiddenInput
+    )
+    supplier = forms.ModelChoiceField(
+        label="공급업체",
+        queryset=Supplier.objects.filter(is_active=True),
+        required=False,
+    )
+    quantity = forms.DecimalField(
+        label="주문수량", max_digits=12, decimal_places=3, initial=1,
+        widget=_qty_widget(allow_zero=False),
+    )
+    memo = forms.CharField(label="메모", required=False)
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["managed_item"].queryset = get_accessible_managed_items(user)
+
+    def clean_quantity(self):
+        value = self.cleaned_data.get("quantity")
+        if value is None or value <= 0:
+            raise forms.ValidationError("주문수량은 0보다 커야 합니다.")
+        return value
+
+
+class CartItemForm(forms.Form):
+    """장바구니 항목 수정 Form (수량/공급업체/메모). (v0.2.0)"""
+
+    supplier = forms.ModelChoiceField(
+        label="공급업체",
+        queryset=Supplier.objects.filter(is_active=True),
+        required=False,
+    )
+    quantity = forms.DecimalField(
+        label="수량", max_digits=12, decimal_places=3,
+        widget=_qty_widget(allow_zero=False),
+    )
+    memo = forms.CharField(
+        label="메모", required=False, widget=forms.Textarea(attrs={"rows": 2})
+    )
+
+    def clean_quantity(self):
+        value = self.cleaned_data.get("quantity")
+        if value is None or value <= 0:
+            raise forms.ValidationError("수량은 0보다 커야 합니다.")
+        return value
+
+
+class ConfirmOrderForm(forms.Form):
+    """주문 확정 Form. (v0.2.0)
+
+    external_order_no 는 선택 입력(전화주문 등은 비워둔다). 내부 주문번호는 자동 생성.
+    """
+
+    order_date = forms.DateField(
+        label="주문일자", initial=timezone.localdate, widget=_date_widget()
+    )
+    external_order_no = forms.CharField(label="외부 주문번호(선택)", required=False)
+    memo = forms.CharField(
+        label="메모", required=False, widget=forms.Textarea(attrs={"rows": 2})
+    )
+
+    def clean_order_date(self):
+        value = self.cleaned_data.get("order_date")
+        if value and value > timezone.localdate():
+            raise forms.ValidationError("주문일자는 미래일 수 없습니다.")
+        return value
 
 
 class PendingTransactionFilterForm(forms.Form):

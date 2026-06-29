@@ -426,6 +426,26 @@ table.data tr.low:hover td { background: #fbe9e7; }
 .badge.low { background: var(--warning-bg); color: var(--warning-fg); }
 .lowstock-more { margin: 8px 2px 0; font-size: 0.9rem; }
 
+/* ---------- 주문(장바구니/주문) v0.2.0 ---------- */
+.sidebar-sep { margin: 12px 0 4px; padding: 0 12px; }
+.sidebar-sep span {
+  font-size: 0.72rem; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.add-cart-form { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; }
+.add-cart-form .cart-qty { width: 56px; }
+.add-cart-form select { max-width: 130px; }
+.add-cart-form button { padding: 4px 10px; font-size: 0.82rem; }
+
+.cart-item { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
+.cart-item-head { width: 100%; margin: 0 0 4px; }
+.cart-edit-form { display: flex; gap: 10px 14px; align-items: flex-end; flex-wrap: wrap; }
+.cart-edit-form label { display: flex; flex-direction: column; font-size: 0.82rem; color: var(--muted); font-weight: 600; gap: 3px; }
+.cart-edit-form .cart-qty { width: 80px; }
+.cart-remove-form { margin-left: auto; }
+button.danger { background: var(--danger); color: #fff; }
+button.danger:hover { background: #a93226; }
+
 /* ---------- mobile ---------- */
 @media (max-width: 760px) {
   .layout { flex-direction: column; }

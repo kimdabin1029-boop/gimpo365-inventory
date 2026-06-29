@@ -34,3 +34,7 @@ class InvalidQuantityError(InventoryError):
 
 class InvalidManagedItemError(InventoryError):
     """관리품목 검증 실패 (비활성, 접근 불가 등)."""
+
+
+class OrderError(InventoryError):
+    """주문(장바구니/주문) 도메인 검증 실패. (v0.2.0)"""

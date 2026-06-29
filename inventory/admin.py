@@ -2,7 +2,14 @@ from django import forms
 from django.contrib import admin
 from django.utils.html import format_html, format_html_join
 
-from inventory.models import Item, ManagedItem, StockTransaction, Supplier
+from inventory.models import (
+    Item,
+    ManagedItem,
+    Order,
+    OrderItem,
+    StockTransaction,
+    Supplier,
+)
 
 
 class DatalistTextInput(forms.TextInput):
@@ -119,4 +126,41 @@ class StockTransactionAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         # Admin 에서 거래 원장 삭제 금지 (TECH_SPEC §0)
+        return False
+
+
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 0
+    fields = ["managed_item", "quantity", "memo"]
+    readonly_fields = ["managed_item", "quantity", "memo"]
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    """주문 조회 중심. 주문 생성은 장바구니 → confirm_order service 로만 한다. (v0.2.0)
+
+    - add 금지 (internal_order_no 자동생성/공급업체별 분리 로직을 우회하지 않도록)
+    - 상태/감사 필드는 readonly (상태 변경은 order_services 로만)
+    """
+
+    list_display = [
+        "internal_order_no", "external_order_no", "supplier",
+        "ordered_by", "order_date", "status",
+    ]
+    list_filter = ["status", "supplier"]
+    search_fields = ["internal_order_no", "external_order_no"]
+    inlines = [OrderItemInline]
+    readonly_fields = [
+        "internal_order_no", "external_order_no", "supplier", "ordered_by",
+        "order_date", "ordered_at", "status", "memo",
+        "canceled_by", "canceled_at", "received_by", "received_at",
+        "created_at", "updated_at",
+    ]
+
+    def has_add_permission(self, request):
         return False

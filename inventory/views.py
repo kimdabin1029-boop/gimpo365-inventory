@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -13,12 +14,15 @@ from django.views.generic import ListView, TemplateView
 from accounts.models import Role
 from accounts.permissions import has_role_at_least, is_manager_or_above
 from inventory.exceptions import InventoryError
-from inventory.models import StockTransaction, TransactionType
+from inventory.models import StockTransaction, Supplier, TransactionType
 from inventory.forms import (
+    AddToCartForm,
     AdjustmentRequestForm,
     ApproveTransactionForm,
     BulkApproveInitialCountsForm,
     CancelTransactionForm,
+    CartItemForm,
+    ConfirmOrderForm,
     PendingTransactionFilterForm,
     RejectTransactionForm,
     StockFilterForm,
@@ -34,6 +38,21 @@ from inventory.selectors import (
     get_pending_transactions,
     get_transactions,
     has_approved_initial_count,
+)
+from inventory.order_selectors import (
+    get_order_or_none,
+    get_orders,
+    get_unreceived_orders,
+)
+from inventory.order_services import (
+    add_to_cart,
+    can_manage_order,
+    cancel_order,
+    confirm_order,
+    get_or_create_cart,
+    mark_order_received,
+    remove_cart_item,
+    update_cart_item,
 )
 from inventory.services import (
     approve_transaction,
@@ -83,6 +102,13 @@ class InventoryDashboardView(LoginRequiredMixin, TemplateView):
         ctx["can_request_adjustment"] = has_role_at_least(user, Role.TEAM_LEADER)
         if ctx["is_manager"]:
             ctx["pending_count"] = get_pending_transactions(user).count()
+
+        # 미입고 주문(ORDERED): 권한 범위 내 최대 5건 + 전체보기 링크 (v0.2.0)
+        DASHBOARD_ORDER_LIMIT = 5
+        unreceived = get_unreceived_orders(user)
+        ctx["unreceived_count"] = unreceived.count()
+        ctx["unreceived_orders"] = list(unreceived[:DASHBOARD_ORDER_LIMIT])
+        ctx["unreceived_more"] = ctx["unreceived_count"] - len(ctx["unreceived_orders"])
         return ctx
 
 
@@ -128,6 +154,7 @@ class StockListView(LoginRequiredMixin, _StockFilterMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["filter_form"] = self._form
+        ctx["suppliers"] = Supplier.objects.filter(is_active=True)  # 주문 담기용
         return ctx
 
 
@@ -150,6 +177,7 @@ class LowStockListView(LoginRequiredMixin, _StockFilterMixin, ListView):
         for item in ctx["object_list"]:
             item.shortage = item.minimum_stock - item.current_stock
         ctx["filter_form"] = self._form
+        ctx["suppliers"] = Supplier.objects.filter(is_active=True)  # 주문 담기용
         return ctx
 
 
@@ -331,6 +359,21 @@ class StockInCreateView(_ServiceCreateView):
     form_class = StockInForm
     page_title = "입고 등록"
     success_message = "입고가 등록되었습니다."
+
+    def get_form(self, data=None):
+        # 주문 상세 "입고 등록으로 이동"에서 넘어온 managed_item/supplier 를 초기값으로 채운다.
+        # (값 prefill 만; 실제 저장/현재고 변경은 기존 service 가 담당)
+        if data is None:
+            initial = {}
+            mi = self.request.GET.get("managed_item")
+            sup = self.request.GET.get("supplier")
+            if mi:
+                initial["managed_item"] = mi
+            if sup:
+                initial["supplier"] = sup
+            if initial:
+                return self.form_class(user=self.request.user, initial=initial)
+        return self.form_class(user=self.request.user, data=data)
 
     def perform(self, user, cd):
         create_stock_in(
@@ -579,3 +622,246 @@ class BulkApproveInitialCountsView(ManagerRequiredMixin, View):
             f"승인 제외: {len(result['skipped'])}건",
         )
         return redirect(reverse("inventory:pending_list"))
+
+
+# ---------------------------------------------------------------------------
+# 주문 장바구니 / 주문 (v0.2.0)
+# ---------------------------------------------------------------------------
+def _safe_next(request, default_name="inventory:stock_list"):
+    """돌아갈 URL: POST next 파라미터(내부 경로만) 우선, 없으면 기본 화면."""
+    nxt = request.POST.get("next") or request.GET.get("next")
+    if nxt and nxt.startswith("/"):
+        return nxt
+    return reverse(default_name)
+
+
+class AddToCartView(LoginRequiredMixin, View):
+    """관리품목을 주문 장바구니에 담는다. POST 전용. (v0.2.0)"""
+
+    def post(self, request, *args, **kwargs):
+        form = AddToCartForm(user=request.user, data=request.POST)
+        if not form.is_valid():
+            messages.error(request, "장바구니에 담지 못했습니다. 입력값을 확인해주세요.")
+            return redirect(_safe_next(request))
+        cd = form.cleaned_data
+        try:
+            add_to_cart(
+                user=request.user,
+                managed_item=cd["managed_item"],
+                supplier=cd.get("supplier"),
+                quantity=cd["quantity"],
+                memo=cd.get("memo", ""),
+            )
+        except InventoryError as exc:
+            messages.error(request, str(exc))
+            return redirect(_safe_next(request))
+        messages.success(
+            request,
+            f"주문 장바구니에 담았습니다: {cd['managed_item'].item.name}",
+        )
+        return redirect(_safe_next(request))
+
+
+class CartView(LoginRequiredMixin, View):
+    """주문 장바구니 화면. (v0.2.0)"""
+
+    template_name = "inventory/cart.html"
+
+    def get(self, request, *args, **kwargs):
+        cart = get_or_create_cart(request.user)
+        items = list(
+            cart.items.select_related(
+                "managed_item", "managed_item__item",
+                "managed_item__department", "supplier",
+            ).order_by("id")
+        )
+        return render(
+            request,
+            self.template_name,
+            {
+                "items": items,
+                "suppliers": Supplier.objects.filter(is_active=True),
+                "has_missing_supplier": any(i.supplier_id is None for i in items),
+            },
+        )
+
+
+class CartItemUpdateView(LoginRequiredMixin, View):
+    """장바구니 항목 수정 (수량/공급업체/메모). POST 전용. (v0.2.0)"""
+
+    def post(self, request, *args, **kwargs):
+        form = CartItemForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "수정값을 확인해주세요. (수량은 0보다 커야 합니다)")
+            return redirect(reverse("inventory:cart"))
+        cd = form.cleaned_data
+        try:
+            update_cart_item(
+                user=request.user,
+                cart_item_id=kwargs["pk"],
+                quantity=cd["quantity"],
+                supplier=cd.get("supplier"),
+                memo=cd.get("memo", ""),
+            )
+        except InventoryError as exc:
+            messages.error(request, str(exc))
+            return redirect(reverse("inventory:cart"))
+        messages.success(request, "장바구니 항목을 수정했습니다.")
+        return redirect(reverse("inventory:cart"))
+
+
+class CartItemRemoveView(LoginRequiredMixin, View):
+    """장바구니 항목 삭제. POST 전용. (v0.2.0)"""
+
+    def post(self, request, *args, **kwargs):
+        try:
+            remove_cart_item(user=request.user, cart_item_id=kwargs["pk"])
+        except InventoryError as exc:
+            messages.error(request, str(exc))
+            return redirect(reverse("inventory:cart"))
+        messages.success(request, "장바구니에서 삭제했습니다.")
+        return redirect(reverse("inventory:cart"))
+
+
+class OrderConfirmView(LoginRequiredMixin, View):
+    """주문 확정 화면. GET=공급업체별 확인, POST=확정. (v0.2.0)"""
+
+    template_name = "inventory/order_confirm.html"
+
+    def _groups(self, request):
+        cart = get_or_create_cart(request.user)
+        items = list(
+            cart.items.select_related(
+                "managed_item", "managed_item__item", "supplier"
+            ).order_by("id")
+        )
+        groups = {}
+        for ci in items:
+            key = ci.supplier_id
+            groups.setdefault(key, {"supplier": ci.supplier, "items": []})
+            groups[key]["items"].append(ci)
+        return items, list(groups.values())
+
+    def get(self, request, *args, **kwargs):
+        items, groups = self._groups(request)
+        return render(
+            request,
+            self.template_name,
+            {
+                "items": items,
+                "groups": groups,
+                "form": ConfirmOrderForm(),
+                "has_missing_supplier": any(i.supplier_id is None for i in items),
+            },
+        )
+
+    def post(self, request, *args, **kwargs):
+        form = ConfirmOrderForm(request.POST)
+        items, groups = self._groups(request)
+        if not form.is_valid():
+            return render(
+                request,
+                self.template_name,
+                {
+                    "items": items, "groups": groups, "form": form,
+                    "has_missing_supplier": any(i.supplier_id is None for i in items),
+                },
+            )
+        cd = form.cleaned_data
+        try:
+            orders = confirm_order(
+                user=request.user,
+                order_date=cd.get("order_date"),
+                external_order_no=cd.get("external_order_no", ""),
+                memo=cd.get("memo", ""),
+            )
+        except InventoryError as exc:
+            messages.error(request, str(exc))
+            return redirect(reverse("inventory:cart"))
+        messages.success(
+            request,
+            f"주문을 확정했습니다. (공급업체별 {len(orders)}건 생성)",
+        )
+        return redirect(reverse("inventory:order_list"))
+
+
+class OrderListView(LoginRequiredMixin, ListView):
+    """주문 목록. 권한 범위 내 주문. (v0.2.0)"""
+
+    template_name = "inventory/order_list.html"
+    context_object_name = "orders"
+    paginate_by = 50
+
+    def get_queryset(self):
+        return get_orders(self.request.user)
+
+
+class OrderDetailView(LoginRequiredMixin, View):
+    """주문 상세. 권한 범위 밖이면 404. (v0.2.0)"""
+
+    template_name = "inventory/order_detail.html"
+
+    def get(self, request, *args, **kwargs):
+        order = get_order_or_none(request.user, kwargs["pk"])
+        if order is None:
+            raise Http404("주문을 찾을 수 없습니다.")
+        order_items = order.items.select_related(
+            "managed_item", "managed_item__item", "managed_item__department"
+        ).all()
+        return render(
+            request,
+            self.template_name,
+            {
+                "order": order,
+                "order_items": order_items,
+                "can_manage": can_manage_order(request.user, order),
+            },
+        )
+
+
+class OrderCancelView(LoginRequiredMixin, View):
+    """주문 취소. GET=확인, POST=취소. ORDERED 만 가능. (v0.2.0)"""
+
+    template_name = "inventory/order_cancel.html"
+
+    def _get_order(self, request, pk):
+        order = get_order_or_none(request.user, pk)
+        if order is None:
+            raise Http404("주문을 찾을 수 없습니다.")
+        return order
+
+    def get(self, request, *args, **kwargs):
+        order = self._get_order(request, kwargs["pk"])
+        return render(request, self.template_name, {"order": order})
+
+    def post(self, request, *args, **kwargs):
+        order = self._get_order(request, kwargs["pk"])
+        try:
+            cancel_order(
+                user=request.user, order=order,
+                reason=request.POST.get("reason", ""),
+            )
+        except InventoryError as exc:
+            messages.error(request, str(exc))
+            return redirect(reverse("inventory:order_detail", args=[order.pk]))
+        messages.success(request, "주문을 취소했습니다.")
+        return redirect(reverse("inventory:order_detail", args=[order.pk]))
+
+
+class OrderReceiveView(LoginRequiredMixin, View):
+    """주문 입고완료 처리. POST 전용. 현재고는 변경하지 않는다. (v0.2.0)"""
+
+    def post(self, request, *args, **kwargs):
+        order = get_order_or_none(request.user, kwargs["pk"])
+        if order is None:
+            raise Http404("주문을 찾을 수 없습니다.")
+        try:
+            mark_order_received(user=request.user, order=order)
+        except InventoryError as exc:
+            messages.error(request, str(exc))
+            return redirect(reverse("inventory:order_detail", args=[order.pk]))
+        messages.success(
+            request,
+            "주문을 입고완료로 표시했습니다. (실제 재고 증가는 입고 등록으로 처리됩니다)",
+        )
+        return redirect(reverse("inventory:order_detail", args=[order.pk]))
