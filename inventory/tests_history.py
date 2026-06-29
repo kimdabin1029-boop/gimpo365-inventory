@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from core.factories import (
     BaseFixtureTestCase,
+    approve_initial_count,
     create_item,
     create_managed_item,
     create_stock_transaction,
@@ -100,10 +101,12 @@ class AdjustmentListVisibilityTest(BaseFixtureTestCase):
             item=create_item("니들 30G", category=ItemCategory.MEDICAL_SUPPLY),
             department=cls.dept_treatment,
         )
+        # 입고/실사조정 전제: 승인된 최초재고가 먼저 있어야 한다 (HOTFIX)
+        # 피부실 mi 는 MANAGER 의 최초 재고 입력(즉시 APPROVED)으로, 치료실 mi_treat 는 fixture 로 시드
+        ic = request_initial_count(user=cls.manager, managed_item=cls.mi, quantity=0)
+        approve_initial_count(cls.mi_treat, created_by=cls.manager)
         create_stock_in(user=cls.manager, managed_item=cls.mi, quantity=10)
         create_stock_in(user=cls.manager, managed_item=cls.mi_treat, quantity=10)
-        # 최초 재고 승인(피부실 mi) → 이후 실사조정 가능
-        ic = request_initial_count(user=cls.manager, managed_item=cls.mi, quantity=0)
         # team_leader_skin(피부실) 의 실사조정 요청 → 반려(사유 기록)
         cls.adj_skin = request_adjustment(
             user=cls.team_leader_skin, managed_item=cls.mi, actual_quantity=7,

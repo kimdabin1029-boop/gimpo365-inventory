@@ -15,6 +15,7 @@ from accounts.models import Role
 from accounts.permissions import has_role_at_least, is_manager_or_above
 from inventory.exceptions import (
     DuplicateInitialCountError,
+    InitialCountRequiredError,
     InsufficientStockError,
     InvalidManagedItemError,
     InvalidQuantityError,
@@ -34,7 +35,11 @@ from inventory.permissions import (
     can_access_managed_item,
     can_cancel_transaction,
 )
-from inventory.selectors import get_current_stock, has_approved_initial_count
+from inventory.selectors import (
+    get_current_stock,
+    has_approved_initial_count,
+    has_pending_initial_count,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +89,26 @@ def _ensure_active_managed_item(managed_item):
         raise InvalidManagedItemError("비활성 관리품목에는 거래를 등록할 수 없습니다.")
 
 
+def _ensure_initial_count_established(managed_item):
+    """입고/출고 전제: 승인된 최초재고(INITIAL_COUNT)가 있어야 한다. (HOTFIX)
+
+    최초재고는 재고관리의 기준점이므로, 승인된 최초재고가 없는 관리품목에는
+    입고/출고를 등록할 수 없다. 승인대기(PENDING) 최초재고가 있는 경우와
+    아예 등록조차 없는 경우를 구분해 안내한다.
+    """
+    if has_approved_initial_count(managed_item):
+        return
+    if has_pending_initial_count(managed_item):
+        raise InitialCountRequiredError(
+            "이 품목은 최초 재고 등록이 승인 대기 중입니다. "
+            "승인 완료 후 입고/출고 등록이 가능합니다."
+        )
+    raise InitialCountRequiredError(
+        "이 품목은 최초 재고 등록이 승인되지 않아 입고/출고 등록을 할 수 없습니다. "
+        "먼저 최초 재고 등록을 진행해주세요."
+    )
+
+
 def _lock_managed_item(managed_item) -> ManagedItem:
     """ManagedItem row lock. 출고/취소 시 현재고 재검증 직전에 사용. (TECH_SPEC §15.4)
 
@@ -119,6 +144,7 @@ def create_stock_in(
     """
     _check_access(user, managed_item)
     _ensure_active_managed_item(managed_item)
+    _ensure_initial_count_established(managed_item)
     qty = _validate_positive_quantity(quantity)
     occurred = _validate_occurred_at(occurred_at)
 
@@ -156,6 +182,7 @@ def create_stock_out(
     """
     _check_access(user, managed_item)
     _ensure_active_managed_item(managed_item)
+    _ensure_initial_count_established(managed_item)
 
     if transaction_type not in OUT_TRANSACTION_TYPES:
         raise InvalidTransactionStateError("출고 거래 유형이 아닙니다.")
@@ -246,7 +273,8 @@ def request_initial_count(
     - STAFF → 초기재고 입력 불가
     - TEAM_LEADER → 본인 부서 관리품목, PENDING
     - MANAGER / ADMIN → 즉시 APPROVED
-    - APPROVED INITIAL_COUNT 가 이미 있으면 차단 / PENDING 중복은 허용
+    - APPROVED INITIAL_COUNT 가 이미 있으면 차단
+    - PENDING(승인대기) INITIAL_COUNT 가 이미 있어도 중복 요청 차단 (HOTFIX)
     """
     # 초기재고 입력은 TEAM_LEADER 이상만 가능 (STAFF 차단)
     if not has_role_at_least(user, Role.TEAM_LEADER):
@@ -259,6 +287,11 @@ def request_initial_count(
     if has_approved_initial_count(locked):
         raise DuplicateInitialCountError(
             "이미 승인된 초기재고가 있습니다. 차이는 실사조정(ADJUSTMENT)으로 처리하세요."
+        )
+    if has_pending_initial_count(locked):
+        raise DuplicateInitialCountError(
+            "이미 최초 재고 등록이 승인 대기 중입니다. "
+            "승인 또는 반려 처리 후 다시 시도해주세요."
         )
 
     # 정책: MANAGER/ADMIN 이 생성해 즉시 APPROVED 되는 초기재고는

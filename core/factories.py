@@ -162,6 +162,22 @@ def create_stock_transaction(
     )
 
 
+def approve_initial_count(managed_item, *, created_by, quantity=0):
+    """테스트용: 승인된 최초재고(INITIAL_COUNT) 1건을 직접 생성한다.
+
+    입고/출고 전제(승인된 최초재고 존재)를 만족시키기 위한 fixture 헬퍼.
+    기본 수량 0 → 현재고 합계에 영향을 주지 않으므로 기존 재고 단언을 깨지 않는다.
+    """
+    return create_stock_transaction(
+        managed_item=managed_item,
+        transaction_type=TransactionType.INITIAL_COUNT,
+        status=TransactionStatus.APPROVED,
+        created_by=created_by,
+        quantity_input=quantity,
+        quantity_delta=quantity,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Base TestCase
 # ---------------------------------------------------------------------------

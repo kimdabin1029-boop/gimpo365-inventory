@@ -21,7 +21,11 @@ class InsufficientStockError(InventoryError):
 
 
 class DuplicateInitialCountError(InventoryError):
-    """APPROVED INITIAL_COUNT 중복."""
+    """INITIAL_COUNT 중복 (APPROVED 존재 또는 PENDING 승인대기 존재)."""
+
+
+class InitialCountRequiredError(InventoryError):
+    """승인된 최초재고가 없어 입고/출고를 등록할 수 없음. (HOTFIX)"""
 
 
 class InvalidQuantityError(InventoryError):

@@ -159,3 +159,15 @@ def has_approved_initial_count(managed_item: ManagedItem) -> bool:
         transaction_type=TransactionType.INITIAL_COUNT,
         status=_APPROVED,
     ).exists()
+
+
+def has_pending_initial_count(managed_item: ManagedItem) -> bool:
+    """해당 ManagedItem 에 PENDING(승인대기) INITIAL_COUNT 가 존재하는지.
+
+    최초재고 승인 전 일반 거래(입고/출고/실사조정) 차단 및
+    중복 최초재고 요청 차단에 사용한다. (HOTFIX)
+    """
+    return managed_item.stock_transactions.filter(
+        transaction_type=TransactionType.INITIAL_COUNT,
+        status=TransactionStatus.PENDING,
+    ).exists()

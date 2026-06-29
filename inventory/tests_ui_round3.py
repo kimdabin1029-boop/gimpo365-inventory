@@ -1,6 +1,11 @@
 from django.urls import reverse
 
-from core.factories import BaseFixtureTestCase, create_item, create_managed_item
+from core.factories import (
+    BaseFixtureTestCase,
+    approve_initial_count,
+    create_item,
+    create_managed_item,
+)
 from inventory.models import ItemCategory
 from inventory.services import create_stock_in, request_adjustment
 
@@ -11,6 +16,7 @@ class CancelConfirmScreenTest(BaseFixtureTestCase):
         super().setUpTestData()
         cls.item = create_item("거즈 5x5", category=ItemCategory.MEDICAL_SUPPLY)
         cls.mi = create_managed_item(item=cls.item, department=cls.dept_skin)
+        approve_initial_count(cls.mi, created_by=cls.manager)  # 입고 전제 (HOTFIX)
         cls.tx = create_stock_in(user=cls.manager, managed_item=cls.mi, quantity=10)
 
     def test_cancel_confirm_hides_internal_id(self):
@@ -31,6 +37,7 @@ class AdjustmentListColumnsTest(BaseFixtureTestCase):
         super().setUpTestData()
         cls.item = create_item("거즈 5x5", category=ItemCategory.MEDICAL_SUPPLY)
         cls.mi = create_managed_item(item=cls.item, department=cls.dept_skin)
+        approve_initial_count(cls.mi, created_by=cls.manager)  # 입고/실사조정 전제 (HOTFIX)
         create_stock_in(user=cls.manager, managed_item=cls.mi, quantity=10)
         request_adjustment(
             user=cls.team_leader_skin, managed_item=cls.mi, actual_quantity=7,

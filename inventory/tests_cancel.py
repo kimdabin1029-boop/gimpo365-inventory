@@ -3,7 +3,12 @@ from decimal import Decimal
 
 from django.utils import timezone
 
-from core.factories import BaseFixtureTestCase, create_item, create_managed_item
+from core.factories import (
+    BaseFixtureTestCase,
+    approve_initial_count,
+    create_item,
+    create_managed_item,
+)
 from inventory.exceptions import (
     InsufficientStockError,
     InvalidTransactionStateError,
@@ -35,6 +40,9 @@ class CancelTransactionTest(BaseFixtureTestCase):
         cls.mi_treatment = create_managed_item(
             item=cls.item, department=cls.dept_treatment
         )
+        # 입고/출고 전제: 승인된 최초재고 (HOTFIX) — 수량 0 으로 시드
+        approve_initial_count(cls.mi_skin, created_by=cls.manager)
+        approve_initial_count(cls.mi_treatment, created_by=cls.manager)
 
     def _in(self, *, user, mi, qty=10):
         return create_stock_in(user=user, managed_item=mi, quantity=qty)
@@ -130,8 +138,11 @@ class CancelTransactionTest(BaseFixtureTestCase):
 
     def test_initial_count_cancel_blocked(self):
         """12.9 INITIAL_COUNT 취소 차단 테스트"""
+        # mi_skin 은 이미 최초재고가 시드되어 있으므로 최초재고가 없는 별도 품목을 사용한다.
+        fresh_item = create_item("니들 30G", category=ItemCategory.MEDICAL_SUPPLY)
+        fresh_mi = create_managed_item(item=fresh_item, department=self.dept_skin)
         tx = request_initial_count(
-            user=self.manager, managed_item=self.mi_skin, quantity=20
+            user=self.manager, managed_item=fresh_mi, quantity=20
         )  # 즉시 APPROVED
         with self.assertRaises(InvalidTransactionStateError):
             cancel_transaction(

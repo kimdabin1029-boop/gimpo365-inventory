@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from core.factories import (
     BaseFixtureTestCase,
+    approve_initial_count,
     create_item,
     create_managed_item,
 )
@@ -26,6 +27,8 @@ class OutDateTest(BaseFixtureTestCase):
         super().setUpTestData()
         cls.item = create_item("거즈 5x5", category=ItemCategory.MEDICAL_SUPPLY)
         cls.mi = create_managed_item(item=cls.item, department=cls.dept_skin)
+        # 입고/출고 전제: 승인된 최초재고 (HOTFIX) — 수량 0 으로 시드
+        approve_initial_count(cls.mi, created_by=cls.manager)
 
     def test_out_form_date_label_and_widget(self):
         """2-3/2-4: 출고일자 날짜 입력"""
@@ -80,6 +83,8 @@ class ManagedItemOptionsTest(BaseFixtureTestCase):
             item=cls.item, department=cls.dept_skin, minimum_stock=10
         )
         cls.mi_treat = create_managed_item(item=cls.item, department=cls.dept_treatment)
+        # 입고 전제: 승인된 최초재고 (HOTFIX) — 수량 0 으로 시드
+        approve_initial_count(cls.mi_skin, created_by=cls.manager)
         create_stock_in(user=cls.manager, managed_item=cls.mi_skin, quantity=12)
 
     def test_option_carries_stock_data(self):

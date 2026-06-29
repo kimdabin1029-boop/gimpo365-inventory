@@ -1,7 +1,12 @@
 from django.test import Client
 from django.urls import reverse
 
-from core.factories import BaseFixtureTestCase, create_item, create_managed_item
+from core.factories import (
+    BaseFixtureTestCase,
+    approve_initial_count,
+    create_item,
+    create_managed_item,
+)
 from inventory.models import (
     ItemCategory,
     StockTransaction,
@@ -41,6 +46,7 @@ class DirectAccessGuardTest(StateViewTestBase):
     def test_cancel_url_direct_access_blocked(self):
         """15.4 cancel URL 직접 접근 차단 (취소 권한 없는 사용자)"""
         # team_leader_skin 이 등록한 IN → staff_skin 은 취소 불가
+        approve_initial_count(self.mi, created_by=self.manager)  # 입고 전제 (HOTFIX)
         tx = create_stock_in(
             user=self.team_leader_skin, managed_item=self.mi, quantity=10
         )
@@ -100,6 +106,7 @@ class CsrfTest(StateViewTestBase):
 class CancelLinkRenderTest(StateViewTestBase):
     def test_cancel_link_points_to_cancel_url(self):
         """TASK 15 cancel marker 가 실제 cancel URL 로 연결됨"""
+        approve_initial_count(self.mi, created_by=self.manager)  # 입고 전제 (HOTFIX)
         in_tx = create_stock_in(user=self.manager, managed_item=self.mi, quantity=10)
         self.client.force_login(self.manager)
         resp = self.client.get(reverse("inventory:transaction_list"))

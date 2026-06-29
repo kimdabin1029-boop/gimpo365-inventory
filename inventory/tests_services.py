@@ -2,12 +2,14 @@ from decimal import Decimal
 
 from core.factories import (
     BaseFixtureTestCase,
+    approve_initial_count,
     create_item,
     create_managed_item,
     create_supplier,
 )
 from inventory.exceptions import (
     DuplicateInitialCountError,
+    InitialCountRequiredError,
     InsufficientStockError,
     InvalidQuantityError,
     InvalidTransactionStateError,
@@ -36,6 +38,8 @@ class StockInServiceTest(BaseFixtureTestCase):
         cls.mi_treatment = create_managed_item(
             item=cls.item, department=cls.dept_treatment
         )
+        # 입고 전제: 승인된 최초재고가 있어야 한다 (HOTFIX) — 수량 0 으로 시드
+        approve_initial_count(cls.mi_skin, created_by=cls.manager)
 
     def test_create_stock_in_success(self):
         """7.1 create_stock_in 성공 테스트"""
@@ -86,6 +90,8 @@ class StockOutServiceTest(BaseFixtureTestCase):
         cls.mi_treatment = create_managed_item(
             item=cls.item, department=cls.dept_treatment
         )
+        # 출고 전제: 승인된 최초재고가 있어야 한다 (HOTFIX) — 수량 0 으로 시드
+        approve_initial_count(cls.mi_skin, created_by=cls.manager)
 
     def _stock_in(self, qty):
         return create_stock_in(
@@ -154,6 +160,8 @@ class AdjustmentServiceTest(BaseFixtureTestCase):
         super().setUpTestData()
         cls.item = create_item("거즈 5x5", category=ItemCategory.MEDICAL_SUPPLY)
         cls.mi = create_managed_item(item=cls.item, department=cls.dept_skin)
+        # 입고/출고 전제: 승인된 최초재고가 있어야 한다 (HOTFIX) — 수량 0 으로 시드
+        approve_initial_count(cls.mi, created_by=cls.manager)
 
     def _set_stock_7(self):
         create_stock_in(user=self.staff_skin, managed_item=self.mi, quantity=10)
@@ -260,13 +268,115 @@ class InitialCountServiceTest(BaseFixtureTestCase):
                 user=self.manager, managed_item=self.mi, quantity=5
             )
 
-    def test_pending_initial_count_duplicate_allowed(self):
-        """10.4 PENDING 초기재고 중복 요청 허용"""
+    def test_pending_initial_count_duplicate_blocked(self):
+        """10.4 PENDING 초기재고가 있으면 중복 최초재고 요청 차단 (HOTFIX)"""
         request_initial_count(user=self.team_leader_skin, managed_item=self.mi, quantity=20)
-        # 승인된 것이 없으므로 두 번째 PENDING 요청도 허용
-        request_initial_count(user=self.team_leader_skin, managed_item=self.mi, quantity=18)
+        # 승인대기(PENDING) 최초재고가 이미 있으므로 두 번째 요청은 차단된다.
+        with self.assertRaises(DuplicateInitialCountError):
+            request_initial_count(
+                user=self.team_leader_skin, managed_item=self.mi, quantity=18
+            )
         pending = self.mi.stock_transactions.filter(
             transaction_type=TransactionType.INITIAL_COUNT,
             status=TransactionStatus.PENDING,
         )
-        self.assertEqual(pending.count(), 2)
+        self.assertEqual(pending.count(), 1)
+
+
+class InitialCountGuardTest(BaseFixtureTestCase):
+    """HOTFIX: 승인된 최초재고가 없으면 입고/출고를 차단한다.
+
+    - 승인된 INITIAL_COUNT 가 없으면 입고/출고 실패
+    - PENDING(승인대기) INITIAL_COUNT 만 있어도 입고/출고 실패
+    - 승인된 INITIAL_COUNT(수량 0 포함)가 있으면 입고/출고 가능
+    - 최초재고가 없는 품목에서 INITIAL_COUNT 요청 자체는 가능
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.item = create_item("거즈 5x5", category=ItemCategory.MEDICAL_SUPPLY)
+        cls.mi = create_managed_item(item=cls.item, department=cls.dept_skin)
+
+    def _approve_initial(self, quantity):
+        """MANAGER 의 최초 재고 입력(즉시 APPROVED)."""
+        return request_initial_count(
+            user=self.manager, managed_item=self.mi, quantity=quantity
+        )
+
+    # --- 1: 승인된 최초재고 없음 → 입고 실패 ---
+    def test_stock_in_blocked_without_initial_count(self):
+        with self.assertRaises(InitialCountRequiredError) as ctx:
+            create_stock_in(user=self.staff_skin, managed_item=self.mi, quantity=10)
+        self.assertIn("최초 재고 등록이 승인되지 않아", str(ctx.exception))
+
+    # --- 2: 승인된 최초재고 없음 → 출고 실패 ---
+    def test_stock_out_blocked_without_initial_count(self):
+        with self.assertRaises(InitialCountRequiredError) as ctx:
+            create_stock_out(
+                user=self.staff_skin,
+                managed_item=self.mi,
+                transaction_type=TransactionType.OUT_USE,
+                quantity=1,
+            )
+        self.assertIn("최초 재고 등록이 승인되지 않아", str(ctx.exception))
+
+    # --- 3: PENDING 최초재고만 있음 → 입고/출고 실패 (승인대기 안내) ---
+    def test_stock_in_blocked_with_pending_initial_count(self):
+        request_initial_count(
+            user=self.team_leader_skin, managed_item=self.mi, quantity=20
+        )  # PENDING
+        with self.assertRaises(InitialCountRequiredError) as ctx:
+            create_stock_in(user=self.staff_skin, managed_item=self.mi, quantity=10)
+        self.assertIn("승인 대기 중", str(ctx.exception))
+
+    def test_stock_out_blocked_with_pending_initial_count(self):
+        request_initial_count(
+            user=self.team_leader_skin, managed_item=self.mi, quantity=20
+        )  # PENDING
+        with self.assertRaises(InitialCountRequiredError) as ctx:
+            create_stock_out(
+                user=self.staff_skin,
+                managed_item=self.mi,
+                transaction_type=TransactionType.OUT_USE,
+                quantity=1,
+            )
+        self.assertIn("승인 대기 중", str(ctx.exception))
+
+    # --- 4 & 5: 승인된 최초재고 있음 → 입고/출고 가능 ---
+    def test_stock_in_allowed_with_approved_initial_count(self):
+        self._approve_initial(20)
+        tx = create_stock_in(user=self.staff_skin, managed_item=self.mi, quantity=10)
+        self.assertEqual(tx.status, TransactionStatus.APPROVED)
+        self.assertEqual(get_current_stock(self.mi), Decimal("30"))
+
+    def test_stock_out_allowed_with_approved_initial_count(self):
+        self._approve_initial(20)
+        tx = create_stock_out(
+            user=self.staff_skin,
+            managed_item=self.mi,
+            transaction_type=TransactionType.OUT_USE,
+            quantity=5,
+        )
+        self.assertEqual(tx.status, TransactionStatus.APPROVED)
+        self.assertEqual(get_current_stock(self.mi), Decimal("15"))
+
+    # --- 6: 최초재고 0 으로 승인된 품목도 입고/출고 가능 ---
+    def test_stock_in_out_allowed_with_zero_initial_count(self):
+        self._approve_initial(0)
+        create_stock_in(user=self.staff_skin, managed_item=self.mi, quantity=10)
+        create_stock_out(
+            user=self.staff_skin,
+            managed_item=self.mi,
+            transaction_type=TransactionType.OUT_USE,
+            quantity=4,
+        )
+        self.assertEqual(get_current_stock(self.mi), Decimal("6"))
+
+    # --- 5(요청 보장): 최초재고가 없으면 INITIAL_COUNT 요청 자체는 가능 ---
+    def test_initial_count_request_allowed_when_none_exists(self):
+        tx = request_initial_count(
+            user=self.team_leader_skin, managed_item=self.mi, quantity=15
+        )
+        self.assertEqual(tx.transaction_type, TransactionType.INITIAL_COUNT)
+        self.assertEqual(tx.status, TransactionStatus.PENDING)

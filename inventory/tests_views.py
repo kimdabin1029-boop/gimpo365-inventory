@@ -3,6 +3,7 @@ from django.utils import timezone
 
 from core.factories import (
     BaseFixtureTestCase,
+    approve_initial_count,
     create_item,
     create_managed_item,
 )
@@ -78,6 +79,9 @@ class CancelButtonVisibilityTest(BaseFixtureTestCase):
         cls.item2 = create_item("니들 30G", category=ItemCategory.MEDICAL_SUPPLY)
         cls.mi = create_managed_item(item=cls.item, department=cls.dept_skin)
         cls.mi2 = create_managed_item(item=cls.item2, department=cls.dept_skin)
+        # 입고 전제: mi 에는 승인된 최초재고 시드 (HOTFIX).
+        # mi2 는 test_initial_count_has_no_cancel_button 에서 최초재고를 직접 생성하므로 시드하지 않는다.
+        approve_initial_count(cls.mi, created_by=cls.manager)
 
     def test_initial_count_has_no_cancel_button(self):
         """18.1 승인된 INITIAL_COUNT 취소 버튼 없음"""
@@ -113,6 +117,8 @@ class CreateViewTest(BaseFixtureTestCase):
         super().setUpTestData()
         cls.item = create_item("거즈 5x5", category=ItemCategory.MEDICAL_SUPPLY)
         cls.mi = create_managed_item(item=cls.item, department=cls.dept_skin)
+        # 입고/출고 전제: 승인된 최초재고 (HOTFIX) — 수량 0 으로 시드
+        approve_initial_count(cls.mi, created_by=cls.manager)
 
     def test_get_renders_form(self):
         self.client.force_login(self.staff_skin)

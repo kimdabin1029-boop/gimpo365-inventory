@@ -1,6 +1,12 @@
 from decimal import Decimal
 
-from core.factories import BaseFixtureTestCase, create_item, create_managed_item
+from core.factories import (
+    BaseFixtureTestCase,
+    approve_initial_count,
+    create_item,
+    create_managed_item,
+    create_stock_transaction,
+)
 from inventory.exceptions import PermissionDeniedError
 from inventory.models import ItemCategory, TransactionStatus, TransactionType
 from inventory.selectors import get_current_stock
@@ -30,6 +36,22 @@ class BulkApproveInitialCountsTest(BaseFixtureTestCase):
             user=self.team_leader_skin, managed_item=mi, quantity=qty
         )
 
+    def _pending_initial_raw(self, mi, qty=10):
+        """fixture 로 직접 만든 PENDING 최초재고.
+
+        service 는 PENDING 최초재고가 있으면 중복 요청을 차단하므로(HOTFIX),
+        '같은 품목에 PENDING 2건' 시나리오는 fixture 로만 만들 수 있다.
+        (레거시/경합 데이터가 일괄승인 시 어떻게 처리되는지 검증용)
+        """
+        return create_stock_transaction(
+            managed_item=mi,
+            transaction_type=TransactionType.INITIAL_COUNT,
+            status=TransactionStatus.PENDING,
+            created_by=self.team_leader_skin,
+            quantity_input=qty,
+            quantity_delta=qty,
+        )
+
     def test_bulk_approve_success(self):
         """13.1 초기재고 일괄 승인 성공 테스트"""
         t1 = self._pending_initial(self.mi_a, 10)
@@ -51,7 +73,7 @@ class BulkApproveInitialCountsTest(BaseFixtureTestCase):
         '이미 승인된 초기재고가 있음'으로 skip. mi_b 는 정상 승인.
         """
         a1 = self._pending_initial(self.mi_a, 10)
-        a2 = self._pending_initial(self.mi_a, 12)  # PENDING 중복 허용
+        a2 = self._pending_initial_raw(self.mi_a, 12)  # 같은 품목 PENDING 2건 (fixture)
         b1 = self._pending_initial(self.mi_b, 20)
         result = bulk_approve_initial_counts(
             user=self.manager, transaction_ids=[a1.pk, a2.pk, b1.pk]
@@ -66,7 +88,7 @@ class BulkApproveInitialCountsTest(BaseFixtureTestCase):
     def test_one_failure_does_not_rollback_others(self):
         """13.3 한 건 실패가 전체 롤백하지 않는지 테스트"""
         a1 = self._pending_initial(self.mi_a, 10)
-        a2 = self._pending_initial(self.mi_a, 12)  # 둘째는 skip 될 것
+        a2 = self._pending_initial_raw(self.mi_a, 12)  # 둘째는 skip 될 것 (fixture)
         b1 = self._pending_initial(self.mi_b, 20)
         bulk_approve_initial_counts(
             user=self.manager, transaction_ids=[a1.pk, a2.pk, b1.pk]
@@ -90,6 +112,8 @@ class BulkApproveInitialCountsTest(BaseFixtureTestCase):
 
     def test_adjustment_excluded_from_bulk(self):
         """13.5 ADJUSTMENT는 bulk approve 대상 제외"""
+        # 입고 전제: 승인된 최초재고 (HOTFIX)
+        approve_initial_count(self.mi_a, created_by=self.manager)
         create_stock_in(user=self.manager, managed_item=self.mi_a, quantity=10)
         adj = request_adjustment(
             user=self.team_leader_skin,

@@ -1,6 +1,12 @@
 from decimal import Decimal
 
-from core.factories import BaseFixtureTestCase, create_item, create_managed_item
+from core.factories import (
+    BaseFixtureTestCase,
+    approve_initial_count,
+    create_item,
+    create_managed_item,
+    create_stock_transaction,
+)
 from inventory.exceptions import (
     DuplicateInitialCountError,
     InsufficientStockError,
@@ -32,6 +38,8 @@ class ApprovalServiceTest(BaseFixtureTestCase):
     def _pending_adjustment(self, *, stock_in=10, actual=7, creator=None):
         # 실사조정은 TEAM_LEADER 이상만 (v0.1.1)
         creator = creator or self.team_leader_skin
+        # 입고 전제: 승인된 최초재고가 있어야 한다 (HOTFIX) — 수량 0 으로 시드
+        approve_initial_count(self.mi, created_by=self.manager)
         create_stock_in(user=self.manager, managed_item=self.mi, quantity=stock_in)
         return request_adjustment(
             user=creator,
@@ -105,9 +113,21 @@ class ApprovalServiceTest(BaseFixtureTestCase):
         self.assertEqual(get_current_stock(self.mi), Decimal("20"))
 
     def test_approve_initial_count_duplicate_blocked(self):
-        """10.6 초기재고 승인 시 중복 차단 테스트"""
+        """10.6 초기재고 승인 시 중복 차단 테스트
+
+        service 는 PENDING 최초재고가 있으면 중복 요청을 차단하므로(HOTFIX),
+        '두 PENDING 이 공존하는' 상황은 fixture 로 직접 만든다(레거시/경합 데이터 가정).
+        첫 건 승인 후 둘째 건 승인은 APPROVED 중복으로 차단되어야 한다.
+        """
         tx1 = self._pending_initial(qty=20)
-        tx2 = self._pending_initial(qty=18)  # PENDING 중복 허용
+        tx2 = create_stock_transaction(
+            managed_item=self.mi,
+            transaction_type=TransactionType.INITIAL_COUNT,
+            status=TransactionStatus.PENDING,
+            created_by=self.team_leader_skin,
+            quantity_input=18,
+            quantity_delta=18,
+        )
         approve_transaction(user=self.manager, transaction_obj=tx1)
         with self.assertRaises(DuplicateInitialCountError):
             approve_transaction(user=self.manager, transaction_obj=tx2)
