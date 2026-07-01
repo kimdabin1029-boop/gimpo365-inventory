@@ -116,6 +116,7 @@ class StockTransactionAdmin(admin.ModelAdmin):
         "expiration_date",
         "canceled_by",
         "canceled_at",
+        "source_order_item",
         "created_at",
         "updated_at",
     ]

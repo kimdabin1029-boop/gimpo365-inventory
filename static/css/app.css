@@ -446,6 +446,17 @@ table.data tr.low:hover td { background: #fbe9e7; }
 button.danger { background: var(--danger); color: #fff; }
 button.danger:hover { background: #a93226; }
 
+/* ---------- 주문 품목 입고등록 (v0.2.1) ---------- */
+.order-item-card { }
+.order-item-head { margin: 0 0 4px; }
+.order-item-progress { margin: 0 0 10px; font-size: 0.92rem; }
+.badge.ok { background: var(--success-bg); color: var(--success-fg); }
+.inbound-form { display: flex; gap: 10px 14px; align-items: flex-end; flex-wrap: wrap; }
+.inbound-form label { display: flex; flex-direction: column; gap: 3px; font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+.inbound-form label.inline-check { flex-direction: row; align-items: center; gap: 6px; }
+.inbound-form input[type="number"] { width: 90px; }
+.help-text { font-size: 0.82rem; margin: 8px 0 0; }
+
 /* ---------- mobile ---------- */
 @media (max-width: 760px) {
   .layout { flex-direction: column; }

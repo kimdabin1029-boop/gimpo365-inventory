@@ -1131,3 +1131,16 @@ StockTransaction Admin에서 add/delete를 허용하지 마라.
 - 잠금 해제 UI(ADMIN) 및 감사 로그
 - 타이밍/동시성: 카운트 증가 경합 처리
 ```
+
+---
+
+## v0.2.1 변경 요약 (주문서-입고 연결 / 사용성)
+
+- **주문서 기반 입고등록**: `OrderItem` 단위 [입고등록] → `create_stock_in_from_order_item` → 기존 `create_stock_in` service 로 APPROVED 입고거래 생성. `StockTransaction.source_order_item` FK 로 연결.
+- **부분입고**: `OrderStatus.PARTIALLY_RECEIVED` 추가. Order 상태는 OrderItem 기입고/잔여(=APPROVED 입고 합계 기준)로 자동 계산(`recompute_order_status`). 기입고 수량은 별도 저장하지 않는다.
+- **초과 입고 차단**: 주문 잔여수량까지만 허용. 초과분은 일반 입고등록 + 메모 안내.
+- **단가/유통기한 강화**: 입고등록 단가 필수(>0)·유통기한 필수. '유통기한 없음' → 입고일+3년 자동(빈 값 저장 안 함). 일반/주문서 기반 입고 모두 적용.
+- **화면/권한**: 재고현황+최소재고 통합(`?filter=low_stock`), MANAGER/ADMIN 부서 필터(거래이력/승인대기/주문/입고대기), STAFF/TL 부서 필터 미노출(권한 범위 확대 없음), 주문 단위 입고완료 버튼 제거.
+- **세션**: 2시간 미사용 만료 + 매요청 갱신 + 브라우저 종료 만료.
+- 금지 유지: 주문/상태변경만으로 현재고 변경 금지, `StockTransaction.objects.create()` 직접 호출 금지, 거래 status 직접 변경 금지, 거래 삭제 금지, Admin add/delete 완화 금지.
+- 마이그레이션: `inventory/0004_stocktransaction_source_order_item_and_more.py` (source_order_item 추가 + OrderStatus choices).

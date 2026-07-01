@@ -77,6 +77,13 @@
           <a class="sidebar-link" href="{% url 'inventory:order_list' %}">주문 목록</a>
         {% endif %}
       </li>
+      <li>
+        {% if cur == 'inbound_pending' %}
+          <a class="sidebar-link active" aria-current="page" href="{% url 'inventory:inbound_pending' %}">입고대기 품목</a>
+        {% else %}
+          <a class="sidebar-link" href="{% url 'inventory:inbound_pending' %}">입고대기 품목</a>
+        {% endif %}
+      </li>
     </ul>
   </nav>
 </aside>

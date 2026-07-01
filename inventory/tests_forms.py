@@ -63,10 +63,13 @@ class UserAwareQuerysetTest(FormFixtureMixin, BaseFixtureTestCase):
 
 
 class UnitPriceVisibilityTest(FormFixtureMixin, BaseFixtureTestCase):
-    def test_staff_unit_price_removed(self):
-        """14.5 STAFF StockInForm unit_price 제거 테스트"""
+    """v0.2.1: 입고 단가는 모든 역할에 노출되고 필수다. (데이터 품질 강화)"""
+
+    def test_staff_unit_price_present_and_required(self):
+        """v0.2.1: STAFF 도 입고 단가 입력 필드가 있고 필수다."""
         form = StockInForm(user=self.staff_skin)
-        self.assertNotIn("unit_price", form.fields)
+        self.assertIn("unit_price", form.fields)
+        self.assertTrue(form.fields["unit_price"].required)
 
     def test_team_leader_unit_price_present(self):
         """14.6 TEAM_LEADER StockInForm unit_price 표시 테스트"""
@@ -102,6 +105,9 @@ class OccurredAtTest(FormFixtureMixin, BaseFixtureTestCase):
             "managed_item": self.mi_skin.pk,
             "quantity": "5",
             "occurred_at": today,
+            # v0.2.1: 단가/유통기한 필수
+            "unit_price": "1000",
+            "no_expiration": "on",
         }
         form = StockInForm(user=self.staff_skin, data=data)
         self.assertTrue(form.is_valid(), form.errors)
@@ -116,6 +122,9 @@ class OccurredAtTest(FormFixtureMixin, BaseFixtureTestCase):
             "managed_item": self.mi_skin.pk,
             "quantity": "5",
             "occurred_at": past,
+            # v0.2.1: 단가/유통기한 필수
+            "unit_price": "1000",
+            "no_expiration": "on",
         }
         form = StockInForm(user=self.staff_skin, data=data)
         self.assertTrue(form.is_valid(), form.errors)

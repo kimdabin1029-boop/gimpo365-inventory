@@ -1,10 +1,11 @@
-"""주문(장바구니/주문) service. (v0.2.0)
+"""주문(장바구니/주문) service. (v0.2.0 / v0.2.1)
 
 원칙:
 - 주문은 현재고를 변경하지 않는다. 실제 재고 증가는 입고(StockTransaction IN)로만 발생한다.
-  (이 모듈은 StockTransaction 을 생성/수정하지 않는다.)
+- 주문서 기반 입고등록도 반드시 기존 create_stock_in service 를 통해 APPROVED 입고거래를 만든다.
+  (이 모듈은 StockTransaction 을 직접 create/save 하지 않는다.)
 - 장바구니/주문 변경은 이 모듈의 service 함수로만 수행한다. (View/Admin 직접 create/save 금지)
-- 권한: 추가/생성은 STAFF 이상(접근 가능한 관리품목), 취소/입고완료는 MANAGER 이상 또는 주문자 본인.
+- 권한: 추가/생성/입고등록은 접근 가능한 관리품목 한정, 취소는 MANAGER 이상 또는 주문자 본인.
 """
 
 from collections import OrderedDict
@@ -25,7 +26,9 @@ from inventory.models import (
     OrderItem,
     OrderStatus,
 )
+from inventory.order_selectors import received_quantity, remaining_quantity
 from inventory.permissions import can_access_managed_item
+from inventory.services import create_stock_in
 
 # update_cart_item 에서 "supplier 미전달"과 "supplier=None(공급업체 지움)"을 구분하기 위한 sentinel
 _UNSET = object()
@@ -268,3 +271,148 @@ def mark_order_received(*, user, order):
         update_fields=["status", "received_by", "received_at", "updated_at"]
     )
     return order
+
+
+# ---------------------------------------------------------------------------
+# 주문서 기반 입고등록 (v0.2.1) — 실제 재고 증가는 create_stock_in 로만
+# ---------------------------------------------------------------------------
+def _add_years(d, years):
+    """날짜에 연 단위를 더한다. 2/29 는 2/28 로 보정."""
+    try:
+        return d.replace(year=d.year + years)
+    except ValueError:
+        return d.replace(year=d.year + years, day=28)
+
+
+def _validate_unit_price_required(value) -> Decimal:
+    """입고 단가: 필수 + 0 초과. (v0.2.1)"""
+    if value is None or value == "":
+        raise OrderError("입고 단가는 필수입니다.")
+    try:
+        price = value if isinstance(value, Decimal) else Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise OrderError("단가가 올바른 숫자가 아닙니다.")
+    if price <= 0:
+        raise OrderError("입고 단가는 0보다 커야 합니다.")
+    return price
+
+
+def resolve_expiration_date(occurred_at, expiration_date, no_expiration):
+    """유통기한 결정. (v0.2.1)
+
+    - no_expiration=True → 입고일(occurred) + 3년 자동 계산 (null 저장하지 않는다)
+    - 그 외 → expiration_date 필수
+    """
+    if no_expiration:
+        if hasattr(occurred_at, "date"):          # datetime
+            base = timezone.localdate(occurred_at)
+        elif occurred_at is not None:             # date
+            base = occurred_at
+        else:
+            base = timezone.localdate()
+        return _add_years(base, 3)
+    if expiration_date is None:
+        raise OrderError(
+            "유통기한은 필수입니다. 표시가 없는 품목은 '유통기한 없음'을 선택하세요."
+        )
+    return expiration_date
+
+
+def recompute_order_status(order, *, by_user=None):
+    """OrderItem 들의 기입고/잔여 수량을 보고 Order.status 를 재계산한다. (v0.2.1)
+
+    - 기입고 합계 0 → ORDERED
+    - 잔여 합계 0 → RECEIVED
+    - 그 외 → PARTIALLY_RECEIVED
+    CANCELED 는 그대로 둔다. (Order 상태는 재고 계산 근거가 아니라 표시용 요약)
+    """
+    if order.status == OrderStatus.CANCELED:
+        return order
+    items = list(order.items.all())
+    total_received = sum((received_quantity(i) for i in items), Decimal("0"))
+    total_remaining = sum((remaining_quantity(i) for i in items), Decimal("0"))
+
+    if total_received <= 0:
+        new_status = OrderStatus.ORDERED
+    elif total_remaining <= 0:
+        new_status = OrderStatus.RECEIVED
+    else:
+        new_status = OrderStatus.PARTIALLY_RECEIVED
+
+    fields = []
+    if new_status != order.status:
+        order.status = new_status
+        fields.append("status")
+        if new_status == OrderStatus.RECEIVED:
+            order.received_by = by_user
+            order.received_at = timezone.now()
+            fields += ["received_by", "received_at"]
+        elif order.received_at is not None:
+            # 입고거래 취소 등으로 RECEIVED 에서 벗어나면 완료 기록을 지운다.
+            order.received_by = None
+            order.received_at = None
+            fields += ["received_by", "received_at"]
+    if fields:
+        order.save(update_fields=fields + ["updated_at"])
+    return order
+
+
+@transaction.atomic
+def create_stock_in_from_order_item(
+    *,
+    user,
+    order_item,
+    quantity,
+    occurred_at=None,
+    unit_price=None,
+    expiration_date=None,
+    no_expiration=False,
+    memo="",
+):
+    """주문 품목(OrderItem) 기반 입고등록. (v0.2.1)
+
+    실제 재고 증가는 create_stock_in 을 통해서만 발생하며, 생성된 입고거래를
+    source_order_item 으로 연결한다. 주문수량 초과 입고는 차단한다.
+    """
+    # 1) 권한: 연결 관리품목 접근 가능해야 함 (권한 범위 확대 없음)
+    mi = order_item.managed_item
+    if not can_access_managed_item(user, mi):
+        raise PermissionDeniedError("해당 주문 품목을 입고등록할 권한이 없습니다.")
+
+    order = order_item.order
+    # 2) 취소 주문 차단
+    if order.status == OrderStatus.CANCELED:
+        raise OrderError("취소된 주문의 품목은 입고등록할 수 없습니다.")
+
+    # 3) 수량 검증
+    qty = _to_positive_quantity(quantity)
+
+    # 4) 잔여수량 초과 차단 (row lock 하에서 재계산)
+    locked_oi = OrderItem.objects.select_for_update().get(pk=order_item.pk)
+    remaining = remaining_quantity(locked_oi)
+    if qty > remaining:
+        raise OrderError(
+            f"입고수량이 잔여 주문수량({remaining})보다 많습니다. "
+            "초과 입고분은 일반 입고등록으로 별도 처리하고, 메모에 '추가증정' 등 사유를 남겨 주세요."
+        )
+
+    # 5) 단가/유통기한 검증 (v0.2.1)
+    price = _validate_unit_price_required(unit_price)
+    exp = resolve_expiration_date(occurred_at, expiration_date, no_expiration)
+
+    # 6) 실제 입고거래 생성 (기존 service 재사용) + 주문품목 연결
+    tx = create_stock_in(
+        user=user,
+        managed_item=mi,
+        quantity=qty,
+        occurred_at=occurred_at,
+        supplier=order.supplier,
+        unit_price=price,
+        expiration_date=exp,
+        memo=memo,
+        source_order_item=locked_oi,
+    )
+
+    # 7) 주문 전체 상태 재계산
+    recompute_order_status(order, by_user=user)
+    return tx

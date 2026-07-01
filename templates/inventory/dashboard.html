@@ -53,7 +53,7 @@
     </div>
     <p class="lowstock-more">
       {% if low_stock_more > 0 %}외 {{ low_stock_more }}건 더 있음. {% endif %}
-      <a href="{% url 'inventory:stock_list' %}?low_stock=on">재고현황에서 전체보기 →</a>
+      <a href="{% url 'inventory:stock_list' %}?filter=low_stock">재고현황에서 전체보기 →</a>
     </p>
   {% else %}
     <p class="muted">최소재고 이하 품목이 없습니다.</p>
@@ -104,7 +104,7 @@
   {% endif %}
   <a class="action-card" href="{% url 'inventory:stock_list' %}"
      title="부서별 현재 재고와 부족 품목을 확인합니다.">재고현황</a>
-  <a class="action-card" href="{% url 'inventory:low_stock' %}"
+  <a class="action-card" href="{% url 'inventory:stock_list' %}?filter=low_stock"
      title="현재고가 최소재고 이하인 발주 후보 품목을 확인합니다.">최소재고 이하 품목</a>
   <a class="action-card" href="{% url 'inventory:transaction_list' %}"
      title="입고, 출고, 조정, 취소 기록을 확인합니다.">거래이력</a>

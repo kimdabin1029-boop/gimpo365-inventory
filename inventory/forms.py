@@ -9,6 +9,7 @@
 """
 
 from datetime import datetime, time
+from decimal import Decimal
 
 from django import forms
 from django.db.models import Exists, OuterRef
@@ -20,6 +21,7 @@ from core.models import Department
 from inventory.models import (
     ItemCategory,
     ManagedItem,
+    OrderStatus,
     StockTransaction,
     Supplier,
     TransactionStatus,
@@ -50,6 +52,22 @@ ADJUSTMENT_REASON_CHOICES = [
     ("초기재고 입력 오류", "초기재고 입력 오류"),
     ("기타", "기타"),
 ]
+
+
+# 유통기한 안내 문구 (v0.2.1)
+EXPIRATION_HELP = (
+    "유통기한이 표시되지 않은 품목은 '유통기한 없음'을 선택하세요. "
+    "선택 시 입고일로부터 3년 뒤 날짜가 자동 입력됩니다. "
+    "3년 이상 출고되지 않은 물품은 장기 미사용/재고 점검 대상으로 확인합니다."
+)
+
+
+def add_years_date(d, years):
+    """date 에 연 단위를 더한다 (2/29 → 2/28 보정). (v0.2.1)"""
+    try:
+        return d.replace(year=d.year + years)
+    except ValueError:
+        return d.replace(year=d.year + years, day=28)
 
 
 def _qty_widget(*, allow_zero: bool):
@@ -192,11 +210,17 @@ class StockInForm(forms.Form):
         queryset=Supplier.objects.filter(is_active=True),
         required=False,
     )
+    # 입고 데이터 품질 강화(v0.2.1): 단가 필수(0 초과)
     unit_price = forms.DecimalField(
-        label="입고단가", max_digits=12, decimal_places=2, required=False
+        label="입고단가", max_digits=12, decimal_places=2,
+        required=True, min_value=Decimal("0.01"),
     )
+    # 유통기한 필수. '유통기한 없음' 선택 시 입고일+3년 자동 계산.
     expiration_date = forms.DateField(
         label="유통기한", required=False, widget=_date_widget()
+    )
+    no_expiration = forms.BooleanField(
+        label="유통기한 없음", required=False, help_text=EXPIRATION_HELP
     )
     memo = forms.CharField(
         label="메모", required=False, widget=forms.Textarea(attrs={"rows": 2})
@@ -209,6 +233,7 @@ class StockInForm(forms.Form):
         "supplier",
         "unit_price",
         "expiration_date",
+        "no_expiration",
         "memo",
     ]
 
@@ -216,9 +241,6 @@ class StockInForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.user = user
         _set_managed_item_with_stock(self, user)
-        # STAFF 에게는 unit_price 필드를 노출하지 않는다. (PRODUCT_SPEC §10.6)
-        if not has_role_at_least(user, Role.TEAM_LEADER):
-            self.fields.pop("unit_price", None)
 
     def clean_quantity(self):
         value = self.cleaned_data.get("quantity")
@@ -228,6 +250,20 @@ class StockInForm(forms.Form):
 
     def clean_occurred_at(self):
         return _clean_trade_date(self.cleaned_data.get("occurred_at"), "입고일자")
+
+    def clean(self):
+        cleaned = super().clean()
+        # 유통기한: '없음' 선택 시 입고일+3년 자동, 아니면 필수 (v0.2.1)
+        occurred = cleaned.get("occurred_at")  # clean_occurred_at → datetime
+        if cleaned.get("no_expiration"):
+            base = timezone.localdate(occurred) if occurred else timezone.localdate()
+            cleaned["expiration_date"] = add_years_date(base, 3)
+        elif cleaned.get("expiration_date") is None:
+            self.add_error(
+                "expiration_date",
+                "유통기한은 필수입니다. 표시가 없는 품목은 '유통기한 없음'을 선택하세요.",
+            )
+        return cleaned
 
 
 class StockOutForm(forms.Form):
@@ -422,10 +458,8 @@ class StockFilterForm(forms.Form):
         super().__init__(*args, **kwargs)
         # STAFF / TEAM_LEADER 는 부서 필터를 본인 부서로 제한
         if user is not None and not has_role_at_least(user, Role.MANAGER):
-            dept_id = getattr(user, "department_id", None)
-            self.fields["department"].queryset = Department.objects.filter(
-                pk=dept_id
-            )
+            # STAFF / TEAM_LEADER 에게는 부서 필터를 노출하지 않는다 (권한 범위 유지). (v0.2.1)
+            self.fields.pop("department", None)
 
 
 class TransactionFilterForm(forms.Form):
@@ -459,10 +493,8 @@ class TransactionFilterForm(forms.Form):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         if user is not None and not has_role_at_least(user, Role.MANAGER):
-            dept_id = getattr(user, "department_id", None)
-            self.fields["department"].queryset = Department.objects.filter(
-                pk=dept_id
-            )
+            # STAFF / TEAM_LEADER 에게는 부서 필터를 노출하지 않는다 (권한 범위 유지). (v0.2.1)
+            self.fields.pop("department", None)
 
 
 # ---------------------------------------------------------------------------
@@ -544,6 +576,102 @@ class ConfirmOrderForm(forms.Form):
         return value
 
 
+class OrderItemStockInForm(forms.Form):
+    """주문 품목 기반 입고등록 Form. (v0.2.1)
+
+    관리품목/공급업체/주문수량/주문번호는 주문서에서 자동 표시되므로 이 폼에는 없다.
+    직원이 실제 입고 시 확인/입력하는 값만 받는다.
+    """
+
+    quantity_input = forms.DecimalField(
+        label="입고수량", max_digits=12, decimal_places=3,
+        min_value=Decimal("0.001"), widget=_qty_widget(allow_zero=False),
+    )
+    occurred_at = _trade_date_field("입고일자")
+    unit_price = forms.DecimalField(
+        label="입고단가", max_digits=12, decimal_places=2,
+        required=True, min_value=Decimal("0.01"),
+    )
+    expiration_date = forms.DateField(
+        label="유통기한", required=False, widget=_date_widget()
+    )
+    no_expiration = forms.BooleanField(
+        label="유통기한 없음", required=False, help_text=EXPIRATION_HELP
+    )
+    memo = forms.CharField(
+        label="메모", required=False, widget=forms.Textarea(attrs={"rows": 2})
+    )
+
+    def clean_quantity_input(self):
+        value = self.cleaned_data.get("quantity_input")
+        if value is None or value <= 0:
+            raise forms.ValidationError("입고수량은 0보다 커야 합니다.")
+        return value
+
+    def clean_occurred_at(self):
+        return _clean_trade_date(self.cleaned_data.get("occurred_at"), "입고일자")
+
+    def clean(self):
+        cleaned = super().clean()
+        occurred = cleaned.get("occurred_at")
+        if cleaned.get("no_expiration"):
+            base = timezone.localdate(occurred) if occurred else timezone.localdate()
+            cleaned["expiration_date"] = add_years_date(base, 3)
+        elif cleaned.get("expiration_date") is None:
+            self.add_error(
+                "expiration_date",
+                "유통기한은 필수입니다. 표시가 없는 품목은 '유통기한 없음'을 선택하세요.",
+            )
+        return cleaned
+
+
+class OrderFilterForm(forms.Form):
+    """주문 목록 필터. 부서 필터는 MANAGER/ADMIN 에게만 노출. (v0.2.1)"""
+
+    status = forms.ChoiceField(
+        label="상태",
+        choices=[("", "전체")] + list(OrderStatus.choices),
+        required=False,
+    )
+    supplier = forms.ModelChoiceField(
+        label="공급업체",
+        queryset=Supplier.objects.filter(is_active=True),
+        required=False,
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user is not None and has_role_at_least(user, Role.MANAGER):
+            self.fields["department"] = forms.ModelChoiceField(
+                label="부서",
+                queryset=Department.objects.filter(active_for_inventory=True),
+                required=False,
+            )
+
+
+class InboundPendingFilterForm(forms.Form):
+    """입고대기 품목 필터. 부서 필터는 MANAGER/ADMIN 에게만 노출. (v0.2.1)"""
+
+    supplier = forms.ModelChoiceField(
+        label="공급업체",
+        queryset=Supplier.objects.filter(is_active=True),
+        required=False,
+    )
+    order_date = forms.DateField(
+        label="주문일자", required=False, widget=_date_widget()
+    )
+    overdue = forms.BooleanField(label="7일 이상 미입고", required=False)
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user is not None and has_role_at_least(user, Role.MANAGER):
+            self.fields["department"] = forms.ModelChoiceField(
+                label="부서",
+                queryset=Department.objects.filter(active_for_inventory=True),
+                required=False,
+            )
+
+
 class PendingTransactionFilterForm(forms.Form):
     """승인 큐 필터. (PRODUCT_SPEC §10.12)"""
 
@@ -565,7 +693,5 @@ class PendingTransactionFilterForm(forms.Form):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         if user is not None and not has_role_at_least(user, Role.MANAGER):
-            dept_id = getattr(user, "department_id", None)
-            self.fields["department"].queryset = Department.objects.filter(
-                pk=dept_id
-            )
+            # STAFF / TEAM_LEADER 에게는 부서 필터를 노출하지 않는다 (권한 범위 유지). (v0.2.1)
+            self.fields.pop("department", None)

@@ -141,6 +141,9 @@ class StockInSupplierUXTest(BaseFixtureTestCase):
                 "quantity": "5",
                 "occurred_at": timezone.localdate().strftime("%Y-%m-%d"),
                 "supplier": self.supplier_other.pk,
+                # v0.2.1: 단가/유통기한 필수
+                "unit_price": "1200",
+                "no_expiration": "on",
             },
         )
         self.assertEqual(resp.status_code, 200)

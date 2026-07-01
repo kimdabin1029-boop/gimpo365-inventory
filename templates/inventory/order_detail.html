@@ -12,7 +12,6 @@
     {# TODO(공급업체 상세): 공급업체 상세 화면이 없어 이름만 표시. 화면 추가 시 링크 연결. #}
     <dd>{{ order.supplier.name }}</dd>
     <dt>주문일자</dt><dd>{{ order.order_date|date:"Y-m-d" }}</dd>
-    <dt>주문 생성일시</dt><dd>{{ order.ordered_at|date:"Y-m-d H:i" }}</dd>
     <dt>주문자</dt><dd>{{ order.ordered_by.display_name }}</dd>
     <dt>상태</dt><dd>{{ order.get_status_display }}</dd>
     {% if order.received_by %}
@@ -23,40 +22,74 @@
     {% endif %}
     <dt>메모</dt><dd>{% if order.memo %}{{ order.memo|linebreaksbr }}{% else %}<span class="muted">메모 없음</span>{% endif %}</dd>
   </dl>
+  {% if order.status == 'ORDERED' or order.status == 'PARTIALLY_RECEIVED' %}
+    {% if can_manage %}
+    <div class="form-actions">
+      <a class="cancel-action" href="{% url 'inventory:order_cancel' order.pk %}">주문 취소</a>
+    </div>
+    {% endif %}
+  {% endif %}
 </div>
 
-<h2>주문 품목</h2>
-<div class="table-wrap">
-<table class="data">
-  <thead>
-    <tr><th class="col-name">품목명</th><th class="col-dept">부서</th><th class="num">수량</th><th>메모</th></tr>
-  </thead>
-  <tbody>
-    {% for oi in order_items %}
-    <tr>
-      {# TODO(품목 상세): 품목별 거래이력 화면이 아직 없어 이름만 표시. 화면 추가 시 링크 연결. #}
-      <td class="col-name">{{ oi.managed_item.item.name }}</td>
-      <td class="col-dept">{{ oi.managed_item.department.name }}</td>
-      <td class="num">{{ oi.quantity|qty }} {{ oi.managed_item.get_unit_display }}</td>
-      <td>{{ oi.memo|default:"-" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-</div>
+<h2>주문 품목 · 입고등록</h2>
+<p class="muted">입고등록은 품목 단위로 처리합니다. 주문 확정/상태 변경은 현재고를 바꾸지 않으며,
+  실제 재고 증가는 아래 [입고등록]으로 생성되는 입고 거래로만 발생합니다.</p>
+
+{% for oi in order_items %}
+<section class="card order-item-card">
+  <p class="order-item-head">
+    <strong>{{ oi.managed_item.item.name }}</strong>
+    <span class="muted">／ {{ oi.managed_item.department.name }} ／ {{ oi.managed_item.get_unit_display }}</span>
+  </p>
+  <p class="order-item-progress">
+    주문수량 <strong>{{ oi.quantity|qty }}</strong>
+    · 기입고 <strong>{{ oi.received_qty|qty }}</strong>
+    · 잔여 <strong>{{ oi.remaining_qty|qty }}</strong>
+    ·
+    {% if oi.received_qty <= 0 %}
+      <span class="badge low">미입고</span>
+    {% elif oi.remaining_qty <= 0 %}
+      <span class="badge ok">입고완료</span>
+    {% else %}
+      <span class="badge low">부분입고</span>
+    {% endif %}
+  </p>
+
+  {% if oi.remaining_qty > 0 and order.status != 'CANCELED' %}
+  <form method="post" action="{% url 'inventory:order_item_stock_in' oi.pk %}" class="inbound-form">
+    {% csrf_token %}
+    <label>입고수량
+      <input type="number" name="quantity_input" value="{{ oi.remaining_qty|qty }}" min="0.001" step="1" required>
+    </label>
+    <label>입고일자
+      <input type="date" name="occurred_at" value="{{ today|date:'Y-m-d' }}" required>
+    </label>
+    <label>단가
+      <input type="number" name="unit_price" min="0.01" step="0.01" placeholder="필수" required>
+    </label>
+    <label>유통기한
+      <input type="date" name="expiration_date">
+    </label>
+    <label class="inline-check">
+      <input type="checkbox" name="no_expiration"> 유통기한 없음(입고일+3년)
+    </label>
+    <label>메모
+      <input type="text" name="memo">
+    </label>
+    <button type="submit">입고등록</button>
+  </form>
+  <p class="help-text muted">
+    유통기한이 표시되지 않은 품목은 [유통기한 없음]을 선택하세요. 선택 시 입고일로부터 3년 뒤 날짜가 자동 입력됩니다.
+    3년 이상 출고되지 않은 물품은 장기 미사용/재고 점검 대상으로 확인합니다.
+  </p>
+  {% else %}
+    <p class="muted">입고완료 — 추가 입고등록이 필요하지 않습니다.</p>
+  {% endif %}
+</section>
+{% endfor %}
 
 <div class="form-actions">
   <a class="back-link" href="{% url 'inventory:order_list' %}">주문 목록으로</a>
-  {% if order.status == 'ORDERED' %}
-    {# 입고 등록으로 이동: 품목/공급업체 prefill (실제 재고 증가는 입고 등록에서) #}
-    <a class="action-card" href="{% url 'inventory:stock_in_new' %}?managed_item={{ order_items.0.managed_item_id }}&supplier={{ order.supplier_id }}">입고 등록으로 이동</a>
-    {% if can_manage %}
-      <form method="post" action="{% url 'inventory:order_receive' order.pk %}" style="display:inline">
-        {% csrf_token %}
-        <button type="submit" onclick="return confirm('이 주문을 입고완료로 표시할까요? (현재고는 변경되지 않습니다)');">입고완료 처리</button>
-      </form>
-      <a class="cancel-action" href="{% url 'inventory:order_cancel' order.pk %}">주문 취소</a>
-    {% endif %}
-  {% endif %}
+  <a class="back-link" href="{% url 'inventory:inbound_pending' %}">입고대기 품목</a>
 </div>
 {% endblock %}

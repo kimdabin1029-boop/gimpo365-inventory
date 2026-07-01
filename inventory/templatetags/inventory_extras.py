@@ -10,6 +10,15 @@ from django import template
 register = template.Library()
 
 
+@register.filter(name="days_since")
+def days_since(value, today):
+    """value(date) 부터 today(date) 까지 경과일. 표시 전용. (v0.2.1)"""
+    try:
+        return (today - value).days
+    except (TypeError, AttributeError):
+        return ""
+
+
 @register.filter(name="qty")
 def qty(value):
     """수량(Decimal) 표시에서 불필요한 0 을 제거한다.

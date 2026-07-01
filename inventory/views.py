@@ -23,6 +23,9 @@ from inventory.forms import (
     CancelTransactionForm,
     CartItemForm,
     ConfirmOrderForm,
+    InboundPendingFilterForm,
+    OrderFilterForm,
+    OrderItemStockInForm,
     PendingTransactionFilterForm,
     RejectTransactionForm,
     StockFilterForm,
@@ -40,8 +43,11 @@ from inventory.selectors import (
     has_approved_initial_count,
 )
 from inventory.order_selectors import (
+    get_order_item_for_user_or_none,
+    get_order_items_with_progress,
     get_order_or_none,
     get_orders,
+    get_pending_order_items,
     get_unreceived_orders,
 )
 from inventory.order_services import (
@@ -49,8 +55,8 @@ from inventory.order_services import (
     can_manage_order,
     cancel_order,
     confirm_order,
+    create_stock_in_from_order_item,
     get_or_create_cart,
-    mark_order_received,
     remove_cart_item,
     update_cart_item,
 )
@@ -139,46 +145,45 @@ class _StockFilterMixin:
 
 
 class StockListView(LoginRequiredMixin, _StockFilterMixin, ListView):
-    """현재고 조회. (PRODUCT_SPEC §10.8)"""
+    """재고현황 (전체 품목 / 최소재고 이하 통합). (PRODUCT_SPEC §10.8 / v0.2.1)
+
+    빠른 필터: ?filter=low_stock 이면 최소재고 이하만 표시한다.
+    """
 
     template_name = "inventory/stock_list.html"
     context_object_name = "items"
     paginate_by = 50
 
-    def get_queryset(self):
-        self._form = self.get_filter_form()
-        return get_managed_items_with_current_stock(
-            self.request.user, self.build_filters(self._form)
+    def _low_only(self):
+        # 통합 화면 빠른 필터. 과거 ?low_stock=on 링크도 계속 지원.
+        return self.request.GET.get("filter") == "low_stock" or bool(
+            self.request.GET.get("low_stock")
         )
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["filter_form"] = self._form
-        ctx["suppliers"] = Supplier.objects.filter(is_active=True)  # 주문 담기용
-        return ctx
-
-
-class LowStockListView(LoginRequiredMixin, _StockFilterMixin, ListView):
-    """최소재고 이하 품목. (PRODUCT_SPEC §10.9)"""
-
-    template_name = "inventory/low_stock_list.html"
-    context_object_name = "items"
-    paginate_by = 50
 
     def get_queryset(self):
         self._form = self.get_filter_form()
-        return get_low_stock_managed_items(
-            self.request.user, self.build_filters(self._form)
-        )
+        filters = self.build_filters(self._form)
+        self._low = self._low_only()
+        if self._low:
+            filters["low_stock"] = True
+        return get_managed_items_with_current_stock(self.request.user, filters)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        # 부족 수량 = 최소재고 - 현재고
+        # 부족 수량 = 최소재고 - 현재고 (최소재고 이하 표시용)
         for item in ctx["object_list"]:
             item.shortage = item.minimum_stock - item.current_stock
         ctx["filter_form"] = self._form
         ctx["suppliers"] = Supplier.objects.filter(is_active=True)  # 주문 담기용
+        ctx["active_filter"] = "low_stock" if self._low else "all"
         return ctx
+
+
+class LowStockListView(LoginRequiredMixin, View):
+    """(v0.2.1) 최소재고 이하 품목 화면은 재고현황으로 통합됨 → 리다이렉트."""
+
+    def get(self, request, *args, **kwargs):
+        return redirect(reverse("inventory:stock_list") + "?filter=low_stock")
 
 
 class TransactionListView(LoginRequiredMixin, ListView):
@@ -786,18 +791,30 @@ class OrderConfirmView(LoginRequiredMixin, View):
 
 
 class OrderListView(LoginRequiredMixin, ListView):
-    """주문 목록. 권한 범위 내 주문. (v0.2.0)"""
+    """주문 목록. 권한 범위 내 주문. 부서 필터(MANAGER/ADMIN). (v0.2.0 / v0.2.1)"""
 
     template_name = "inventory/order_list.html"
     context_object_name = "orders"
     paginate_by = 50
 
     def get_queryset(self):
-        return get_orders(self.request.user)
+        self._form = OrderFilterForm(self.request.GET or None, user=self.request.user)
+        filters = {}
+        if self._form.is_valid():
+            cd = self._form.cleaned_data
+            for key in ("status", "supplier", "department"):
+                if cd.get(key):
+                    filters[key] = cd[key]
+        return get_orders(self.request.user, filters)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["filter_form"] = self._form
+        return ctx
 
 
 class OrderDetailView(LoginRequiredMixin, View):
-    """주문 상세. 권한 범위 밖이면 404. (v0.2.0)"""
+    """주문 상세. OrderItem 별 기입고/잔여 + 입고등록 폼. 권한 밖이면 404. (v0.2.1)"""
 
     template_name = "inventory/order_detail.html"
 
@@ -805,18 +822,79 @@ class OrderDetailView(LoginRequiredMixin, View):
         order = get_order_or_none(request.user, kwargs["pk"])
         if order is None:
             raise Http404("주문을 찾을 수 없습니다.")
-        order_items = order.items.select_related(
-            "managed_item", "managed_item__item", "managed_item__department"
-        ).all()
         return render(
             request,
             self.template_name,
             {
                 "order": order,
-                "order_items": order_items,
+                "order_items": get_order_items_with_progress(order),
                 "can_manage": can_manage_order(request.user, order),
+                "today": timezone.localdate(),
             },
         )
+
+
+class OrderItemStockInView(LoginRequiredMixin, View):
+    """주문 품목 기반 입고등록. POST 전용. (v0.2.1)
+
+    실제 재고 증가는 create_stock_in_from_order_item → create_stock_in service 로만.
+    """
+
+    def post(self, request, *args, **kwargs):
+        order_item = get_order_item_for_user_or_none(request.user, kwargs["pk"])
+        if order_item is None:
+            raise Http404("주문 품목을 찾을 수 없습니다.")
+        detail_url = reverse("inventory:order_detail", args=[order_item.order_id])
+        form = OrderItemStockInForm(request.POST)
+        if not form.is_valid():
+            errs = "; ".join(
+                f"{f}: {e[0]}" for f, e in form.errors.items()
+            )
+            messages.error(request, f"입고등록 값을 확인해주세요. {errs}")
+            return redirect(detail_url)
+        cd = form.cleaned_data
+        try:
+            create_stock_in_from_order_item(
+                user=request.user,
+                order_item=order_item,
+                quantity=cd["quantity_input"],
+                occurred_at=cd.get("occurred_at"),
+                unit_price=cd.get("unit_price"),
+                expiration_date=cd.get("expiration_date"),
+                no_expiration=cd.get("no_expiration", False),
+                memo=cd.get("memo", ""),
+            )
+        except InventoryError as exc:
+            messages.error(request, str(exc))
+            return redirect(detail_url)
+        messages.success(request, "입고등록이 완료되었습니다. (재고가 증가했습니다)")
+        return redirect(detail_url)
+
+
+class InboundPendingListView(LoginRequiredMixin, ListView):
+    """입고대기 품목: 잔여수량 > 0 인 OrderItem. 부서 필터(MANAGER/ADMIN). (v0.2.1)"""
+
+    template_name = "inventory/inbound_pending.html"
+    context_object_name = "items"
+    paginate_by = 50
+
+    def get_queryset(self):
+        self._form = InboundPendingFilterForm(
+            self.request.GET or None, user=self.request.user
+        )
+        filters = {}
+        if self._form.is_valid():
+            cd = self._form.cleaned_data
+            for key in ("supplier", "department", "order_date", "overdue"):
+                if cd.get(key):
+                    filters[key] = cd[key]
+        return get_pending_order_items(self.request.user, filters)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["filter_form"] = self._form
+        ctx["today"] = timezone.localdate()
+        return ctx
 
 
 class OrderCancelView(LoginRequiredMixin, View):
@@ -848,20 +926,6 @@ class OrderCancelView(LoginRequiredMixin, View):
         return redirect(reverse("inventory:order_detail", args=[order.pk]))
 
 
-class OrderReceiveView(LoginRequiredMixin, View):
-    """주문 입고완료 처리. POST 전용. 현재고는 변경하지 않는다. (v0.2.0)"""
-
-    def post(self, request, *args, **kwargs):
-        order = get_order_or_none(request.user, kwargs["pk"])
-        if order is None:
-            raise Http404("주문을 찾을 수 없습니다.")
-        try:
-            mark_order_received(user=request.user, order=order)
-        except InventoryError as exc:
-            messages.error(request, str(exc))
-            return redirect(reverse("inventory:order_detail", args=[order.pk]))
-        messages.success(
-            request,
-            "주문을 입고완료로 표시했습니다. (실제 재고 증가는 입고 등록으로 처리됩니다)",
-        )
-        return redirect(reverse("inventory:order_detail", args=[order.pk]))
+# OrderReceiveView(주문 단위 입고완료 버튼)는 v0.2.1 에서 제거되었다.
+# 입고등록은 OrderItem 단위(OrderItemStockInView)로만 하며, Order 상태는
+# OrderItem 들의 입고 상태를 보고 recompute_order_status 로 자동 갱신된다.

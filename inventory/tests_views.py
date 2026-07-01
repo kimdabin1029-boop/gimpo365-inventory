@@ -66,9 +66,14 @@ class ListViewAccessTest(BaseFixtureTestCase):
 
     def test_logged_in_access(self):
         self.client.force_login(self.staff_skin)
-        for name in ("stock_list", "low_stock", "transaction_list"):
+        for name in ("stock_list", "transaction_list"):
             resp = self.client.get(reverse(f"inventory:{name}"))
             self.assertEqual(resp.status_code, 200)
+        # v0.2.1: 최소재고 이하 화면은 재고현황으로 통합 → 리다이렉트
+        resp = self.client.get(reverse("inventory:low_stock"))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(reverse("inventory:stock_list"), resp.url)
+        self.assertIn("filter=low_stock", resp.url)
 
 
 class CancelButtonVisibilityTest(BaseFixtureTestCase):
@@ -137,6 +142,9 @@ class CreateViewTest(BaseFixtureTestCase):
                 "quantity": "10",
                 # v0.1.1: 입고일자는 날짜 입력
                 "occurred_at": timezone.localdate().strftime("%Y-%m-%d"),
+                # v0.2.1: 단가 필수 + 유통기한 필수(없음 선택)
+                "unit_price": "1000",
+                "no_expiration": "on",
             },
         )
         # redirect 가 아니라 같은 화면(200) 유지

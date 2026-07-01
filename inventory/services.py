@@ -136,11 +136,13 @@ def create_stock_in(
     unit_price=None,
     expiration_date=None,
     memo="",
+    source_order_item=None,
 ):
     """입고 등록. STAFF 이상, 즉시 APPROVED, quantity_delta=+quantity. (TECH_SPEC §11)
 
     supplier 기본값은 ManagedItem.default_supplier.
     unit_price 의 STAFF 제한은 Form 에서 처리한다 (service 는 받은 값을 그대로 저장).
+    source_order_item: 주문서 기반 입고일 때 연결할 OrderItem (일반 입고는 None). (v0.2.1)
     """
     _check_access(user, managed_item)
     _ensure_active_managed_item(managed_item)
@@ -163,6 +165,7 @@ def create_stock_in(
         unit_price=unit_price,
         expiration_date=expiration_date,
         memo=memo,
+        source_order_item=source_order_item,
     )
 
 

@@ -157,3 +157,12 @@ AUTH_USER_MODEL = "accounts.User"
 LOGIN_URL = "accounts:login"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "accounts:login"
+
+# ---------------------------------------------------------------------------
+# 세션 정책 (v0.2.1) — 공용/원내 PC 로그인 유지 문제 완화
+# ---------------------------------------------------------------------------
+# - 비활동 2시간 후 세션 만료 (사용 중이면 매 요청마다 만료시각이 연장된다)
+# - 브라우저 종료 시 세션 만료
+SESSION_COOKIE_AGE = 60 * 60 * 2
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True

@@ -4,7 +4,15 @@
 {% block content %}
 <h1>주문 목록</h1>
 
-<p><a class="action-card primary" href="{% url 'inventory:cart' %}">주문 장바구니</a></p>
+<p>
+  <a class="action-card primary" href="{% url 'inventory:cart' %}">주문 장바구니</a>
+  <a class="action-card" href="{% url 'inventory:inbound_pending' %}">입고대기 품목</a>
+</p>
+
+<form method="get" class="filter-form">
+  {{ filter_form.as_p }}
+  <button type="submit">조회</button>
+</form>
 
 <div class="table-wrap">
 <table class="data order-table">

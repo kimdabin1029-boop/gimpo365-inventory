@@ -16,13 +16,14 @@ from inventory.views import (
     CartItemRemoveView,
     CartItemUpdateView,
     CartView,
+    InboundPendingListView,
     InventoryDashboardView,
     LowStockListView,
     OrderCancelView,
     OrderConfirmView,
     OrderDetailView,
+    OrderItemStockInView,
     OrderListView,
-    OrderReceiveView,
     PendingTransactionListView,
     RejectTransactionView,
     StockInCreateView,
@@ -84,5 +85,11 @@ urlpatterns = [
     path("orders/", OrderListView.as_view(), name="order_list"),
     path("orders/<int:pk>/", OrderDetailView.as_view(), name="order_detail"),
     path("orders/<int:pk>/cancel/", OrderCancelView.as_view(), name="order_cancel"),
-    path("orders/<int:pk>/receive/", OrderReceiveView.as_view(), name="order_receive"),
+    # 입고대기 품목 + 주문 품목 기반 입고등록 (v0.2.1)
+    path("inbound-pending/", InboundPendingListView.as_view(), name="inbound_pending"),
+    path(
+        "order-items/<int:pk>/stock-in/",
+        OrderItemStockInView.as_view(),
+        name="order_item_stock_in",
+    ),
 ]

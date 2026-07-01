@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load inventory_extras %}
+{% block title %}입고대기 품목 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>입고대기 품목</h1>
+<p class="muted">주문했으나 아직 입고되지 않은(잔여수량 &gt; 0) 품목입니다. 입고등록은 각 주문 상세에서 처리합니다.</p>
+
+<form method="get" class="filter-form">
+  {{ filter_form.as_p }}
+  <button type="submit">조회</button>
+</form>
+
+<div class="table-wrap">
+<table class="data">
+  <thead>
+    <tr>
+      <th>주문번호</th><th>주문일자</th><th>경과일</th><th>공급업체</th>
+      <th class="col-name">관리품목</th><th class="col-dept">부서</th>
+      <th class="num">주문수량</th><th class="num">기입고</th><th class="num">잔여수량</th>
+      <th>주문자</th><th>작업</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for oi in items %}
+    {% with elapsed=oi.order.order_date|days_since:today %}
+    <tr>
+      <td>{{ oi.order.internal_order_no }}</td>
+      <td>{{ oi.order.order_date|date:"Y-m-d" }}</td>
+      <td>
+        {% if elapsed >= 7 %}<span class="badge out">지연 {{ elapsed }}일</span>
+        {% elif elapsed >= 3 %}<span class="badge low">확인 {{ elapsed }}일</span>
+        {% else %}{{ elapsed }}일{% endif %}
+      </td>
+      <td>{{ oi.order.supplier.name }}</td>
+      <td class="col-name">{{ oi.managed_item.item.name }}</td>
+      <td class="col-dept">{{ oi.managed_item.department.name }}</td>
+      <td class="num">{{ oi.quantity|qty }}</td>
+      <td class="num">{{ oi.received_qty|qty }}</td>
+      <td class="num">{{ oi.remaining_qty|qty }}</td>
+      <td>{{ oi.order.ordered_by.display_name }}</td>
+      <td><a href="{% url 'inventory:order_detail' oi.order_id %}">입고등록 →</a></td>
+    </tr>
+    {% endwith %}
+    {% empty %}
+    <tr><td colspan="11">입고대기 품목이 없습니다.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

@@ -271,6 +271,15 @@ class StockTransaction(models.Model):
     )
     canceled_at = models.DateTimeField(null=True, blank=True)
     cancel_reason = models.TextField(blank=True, default="")
+    # 주문서 기반 입고 연결 (v0.2.1). 주문 없이 등록한 일반 입고는 null.
+    # OrderItem 삭제 시 연결 거래가 함께 삭제되면 안 되므로 PROTECT.
+    source_order_item = models.ForeignKey(
+        "inventory.OrderItem",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="stock_transactions",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -331,6 +340,7 @@ class StockTransaction(models.Model):
 #       으로만 발생한다. Order 와 StockTransaction 은 별개 도메인이다. (합치지 않음)
 class OrderStatus(models.TextChoices):
     ORDERED = "ORDERED", "주문완료"
+    PARTIALLY_RECEIVED = "PARTIALLY_RECEIVED", "부분입고"
     RECEIVED = "RECEIVED", "입고완료"
     CANCELED = "CANCELED", "취소"
 

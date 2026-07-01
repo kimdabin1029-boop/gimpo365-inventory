@@ -130,3 +130,11 @@ $env:PGPASSWORD="postgres"
 
 운영 서버 초기 세팅과 계정/비상 복구는 [OPERATIONS_SETUP.md](OPERATIONS_SETUP.md),
 투입 전 점검은 [MANUAL_QA_CHECKLIST.md](MANUAL_QA_CHECKLIST.md) 를 따른다.
+
+## 주문 → 입고 (v0.2.x)
+
+- 주문은 **입고 예정 기록**이며 현재고를 바꾸지 않는다. 실제 재고 증가는 **입고등록**(APPROVED 입고 `StockTransaction`)으로만 발생한다.
+- 주문 상세에서 **OrderItem 단위 [입고등록]** 으로 부분입고할 수 있다. 주문 상태(주문완료/부분입고/입고완료)는 품목 입고 상태로 자동 계산된다.
+- 입고 거래는 `source_order_item` 으로 주문 품목과 연결된다. 기입고 수량 = 연결된 **APPROVED** 입고거래 합계(취소 시 자동 제외).
+- 주문수량 초과 입고는 차단(초과분은 일반 입고등록 + 메모 '추가증정'). 입고등록 시 **단가 필수(>0)·유통기한 필수**('유통기한 없음' 선택 시 입고일+3년 자동).
+- 자세한 운영 절차는 [OPERATIONS_SETUP.md](OPERATIONS_SETUP.md) §6B~6D.

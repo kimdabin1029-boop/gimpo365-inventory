@@ -668,3 +668,14 @@ TASKS.md는 다음을 포함한다.
 연결 테스트 ID
 Codex/Claude Code 지시문
 ```
+
+---
+
+## 부록 T. 주문서-입고 연결 (v0.2.1)
+
+- `StockTransaction.source_order_item` (FK → OrderItem, null, `on_delete=PROTECT`): 주문서 기반 입고 연결. 일반 입고는 null. (거래이력 보존 위해 PROTECT)
+- `OrderStatus`: ORDERED / **PARTIALLY_RECEIVED** / RECEIVED / CANCELED.
+- 현재고 계산 원칙 불변: **APPROVED `StockTransaction.quantity_delta` 합계**. Order 상태는 재고 계산 근거가 아니라 표시용 요약이다.
+- OrderItem 기입고 수량 = `source_order_item` 으로 연결된 **APPROVED** 거래 합계(취소 시 자동 제외). `received_quantity` 를 모델에 저장하지 않는다.
+- 입고 생성 경로: `create_stock_in_from_order_item` → (권한/취소/잔여/단가/유통기한 검증) → `create_stock_in(..., source_order_item=oi)` → `recompute_order_status`. View/Form/Admin 에서 `StockTransaction` 직접 생성 금지 원칙 유지(§3).
+- 세션: `SESSION_COOKIE_AGE=7200`, `SESSION_SAVE_EVERY_REQUEST=True`, `SESSION_EXPIRE_AT_BROWSER_CLOSE=True`.
