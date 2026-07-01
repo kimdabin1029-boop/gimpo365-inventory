@@ -28,7 +28,7 @@
   <tbody>
     {% for item in items %}
     <tr {% if item.current_stock <= item.minimum_stock %}class="low"{% endif %}>
-      <td class="col-name">{{ item.item.name }}</td>
+      <td class="col-name"><a href="{% url 'inventory:managed_item_detail' item.pk %}">{{ item.item.name }}</a></td>
       <td class="col-dept">{{ item.department.name }}</td>
       <td class="num">{{ item.current_stock|qty }}</td>
       <td class="num">{{ item.minimum_stock|qty }}</td>
@@ -43,7 +43,7 @@
         {% endif %}
       </td>
       <td>{{ item.storage_location }}</td>
-      <td>{{ item.default_supplier.name|default:"-" }}</td>
+      <td>{% if item.default_supplier %}<a href="{% url 'inventory:supplier_detail' item.default_supplier_id %}">{{ item.default_supplier.name }}</a>{% else %}-{% endif %}</td>
       <td>{% include "inventory/_add_to_cart.html" %}</td>
     </tr>
     {% empty %}

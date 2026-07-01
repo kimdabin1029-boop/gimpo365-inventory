@@ -9,8 +9,7 @@
     <dt>내부 주문번호</dt><dd>{{ order.internal_order_no }}</dd>
     <dt>외부 주문번호</dt><dd>{{ order.external_order_no|default:"-" }}</dd>
     <dt>공급업체</dt>
-    {# TODO(공급업체 상세): 공급업체 상세 화면이 없어 이름만 표시. 화면 추가 시 링크 연결. #}
-    <dd>{{ order.supplier.name }}</dd>
+    <dd><a href="{% url 'inventory:supplier_detail' order.supplier_id %}">{{ order.supplier.name }}</a></dd>
     <dt>주문일자</dt><dd>{{ order.order_date|date:"Y-m-d" }}</dd>
     <dt>주문자</dt><dd>{{ order.ordered_by.display_name }}</dd>
     <dt>상태</dt><dd>{{ order.get_status_display }}</dd>
@@ -38,9 +37,16 @@
 {% for oi in order_items %}
 <section class="card order-item-card">
   <p class="order-item-head">
-    <strong>{{ oi.managed_item.item.name }}</strong>
+    <strong><a href="{% url 'inventory:managed_item_detail' oi.managed_item_id %}">{{ oi.managed_item.item.name }}</a></strong>
     <span class="muted">／ {{ oi.managed_item.department.name }} ／ {{ oi.managed_item.get_unit_display }}</span>
   </p>
+  {% with ins=oi.stock_transactions.all %}
+    {% if ins %}
+    <p class="order-item-ins muted">입고 거래:
+      {% for t in ins %}{% if t.status == 'APPROVED' %}<a href="{% url 'inventory:transaction_detail' t.pk %}">{{ t.occurred_at|date:"m-d" }} (+{{ t.quantity_delta|qty }})</a>{% if not forloop.last %} · {% endif %}{% endif %}{% endfor %}
+    </p>
+    {% endif %}
+  {% endwith %}
   <p class="order-item-progress">
     주문수량 <strong>{{ oi.quantity|qty }}</strong>
     · 기입고 <strong>{{ oi.received_qty|qty }}</strong>

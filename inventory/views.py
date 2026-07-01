@@ -42,6 +42,20 @@ from inventory.selectors import (
     get_transactions,
     has_approved_initial_count,
 )
+from inventory.detail_selectors import (
+    get_managed_item_detail,
+    get_managed_item_stats,
+    get_recent_order_items_for_managed_item,
+    get_recent_orders_for_supplier,
+    get_recent_stock_ins_for_supplier,
+    get_recent_transactions_for_managed_item,
+    get_supplier_default_items,
+    get_supplier_detail,
+    get_supplier_stats,
+    get_transaction_detail,
+    get_transaction_order_link,
+    get_unreceived_order_items_for_supplier,
+)
 from inventory.order_selectors import (
     get_order_item_for_user_or_none,
     get_order_items_with_progress,
@@ -264,14 +278,65 @@ class TransactionDetailView(LoginRequiredMixin, View):
     template_name = "inventory/transaction_detail.html"
 
     def get(self, request, *args, **kwargs):
-        # get_transactions(user) 가 권한 범위를 그대로 적용하므로 별도 권한검사 불필요.
-        tx = get_object_or_404(get_transactions(request.user), pk=kwargs["pk"])
+        # get_transaction_detail(user) 가 권한 범위를 그대로 적용하므로 별도 권한검사 불필요.
+        tx = get_transaction_detail(request.user, kwargs["pk"])
+        if tx is None:
+            raise Http404("거래를 찾을 수 없습니다.")
         return render(
             request,
             self.template_name,
             {
                 "tx": tx,
                 "can_cancel": can_cancel_transaction(request.user, tx),
+                # 주문 연결 정보(있으면). v0.2.1 source_order_item.
+                "order_link": get_transaction_order_link(tx),
+            },
+        )
+
+
+class ManagedItemDetailView(LoginRequiredMixin, View):
+    """관리품목 상세 (읽기 전용). 권한 범위는 재고현황과 동일. (v0.2.2)
+
+    현재고는 APPROVED 거래 합계(주석)로 표시한다. 범위 밖이면 404.
+    """
+
+    template_name = "inventory/managed_item_detail.html"
+
+    def get(self, request, *args, **kwargs):
+        mi = get_managed_item_detail(request.user, kwargs["pk"])
+        if mi is None:
+            raise Http404("관리품목을 찾을 수 없습니다.")
+        return render(
+            request,
+            self.template_name,
+            {
+                "mi": mi,
+                "stats": get_managed_item_stats(mi),
+                "transactions": get_recent_transactions_for_managed_item(request.user, mi),
+                "order_items": get_recent_order_items_for_managed_item(request.user, mi),
+            },
+        )
+
+
+class SupplierDetailView(LoginRequiredMixin, View):
+    """공급업체 상세 (읽기 전용). 비관리자는 권한 범위 관련 데이터만. (v0.2.2)"""
+
+    template_name = "inventory/supplier_detail.html"
+
+    def get(self, request, *args, **kwargs):
+        supplier = get_supplier_detail(request.user, kwargs["pk"])
+        if supplier is None:
+            raise Http404("공급업체를 찾을 수 없습니다.")
+        return render(
+            request,
+            self.template_name,
+            {
+                "supplier": supplier,
+                "stats": get_supplier_stats(request.user, supplier),
+                "default_items": get_supplier_default_items(request.user, supplier),
+                "orders": get_recent_orders_for_supplier(request.user, supplier),
+                "unreceived_items": get_unreceived_order_items_for_supplier(request.user, supplier),
+                "stock_ins": get_recent_stock_ins_for_supplier(request.user, supplier),
             },
         )
 

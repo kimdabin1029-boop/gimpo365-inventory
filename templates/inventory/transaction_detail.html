@@ -9,7 +9,7 @@
     <dt>거래일자</dt><dd>{{ tx.occurred_at|date:"Y-m-d" }}</dd>
     <dt>입력일시</dt><dd>{{ tx.created_at|date:"Y-m-d H:i" }}</dd>
     <dt>거래유형</dt><dd>{{ tx.get_transaction_type_display }}</dd>
-    <dt>품목명</dt><dd>{{ tx.managed_item.item.name }}{% if tx.managed_item.item.specification %} <span class="muted">({{ tx.managed_item.item.specification }})</span>{% endif %}</dd>
+    <dt>품목명</dt><dd><a href="{% url 'inventory:managed_item_detail' tx.managed_item_id %}">{{ tx.managed_item.item.name }}</a>{% if tx.managed_item.item.specification %} <span class="muted">({{ tx.managed_item.item.specification }})</span>{% endif %}</dd>
     <dt>부서</dt><dd>{{ tx.managed_item.department.name }}</dd>
     <dt>수량 / 증감</dt>
     <dd>
@@ -20,7 +20,7 @@
       <dt>시스템 기준 수량</dt><dd>{{ tx.expected_quantity|qty }} {{ tx.managed_item.get_unit_display }}</dd>
       <dt>실제 수량</dt><dd>{{ tx.actual_quantity|qty }} {{ tx.managed_item.get_unit_display }}</dd>
     {% endif %}
-    <dt>공급업체</dt><dd>{{ tx.supplier.name|default:"-" }}</dd>
+    <dt>공급업체</dt><dd>{% if tx.supplier %}<a href="{% url 'inventory:supplier_detail' tx.supplier_id %}">{{ tx.supplier.name }}</a>{% else %}-{% endif %}</dd>
     {% if tx.unit_price is not None %}
       <dt>입고단가</dt><dd>{{ tx.unit_price|qty }}</dd>
     {% endif %}
@@ -53,6 +53,22 @@
       {% endif %}
     {% endif %}
   </dl>
+
+  <h2>주문 연결</h2>
+  {% if order_link %}
+    <dl class="tx-detail">
+      <dt>연결된 주문번호</dt>
+      <dd><a href="{% url 'inventory:order_detail' order_link.order.pk %}">{{ order_link.order.internal_order_no }}</a></dd>
+      <dt>주문일자</dt><dd>{{ order_link.order.order_date|date:"Y-m-d" }}</dd>
+      <dt>공급업체</dt>
+      <dd><a href="{% url 'inventory:supplier_detail' order_link.order.supplier_id %}">{{ order_link.order.supplier.name }}</a></dd>
+      <dt>주문수량</dt><dd>{{ order_link.ordered_quantity|qty }}</dd>
+      <dt>기입고수량</dt><dd>{{ order_link.received_quantity|qty }}</dd>
+      <dt>잔여수량</dt><dd>{{ order_link.remaining_quantity|qty }}</dd>
+    </dl>
+  {% else %}
+    <p class="muted">연결된 주문 없음</p>
+  {% endif %}
 
   <div class="form-actions">
     <a class="back-link" href="{% url 'inventory:transaction_list' %}">거래이력으로</a>

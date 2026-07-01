@@ -19,6 +19,7 @@ from inventory.views import (
     InboundPendingListView,
     InventoryDashboardView,
     LowStockListView,
+    ManagedItemDetailView,
     OrderCancelView,
     OrderConfirmView,
     OrderDetailView,
@@ -29,6 +30,7 @@ from inventory.views import (
     StockInCreateView,
     StockListView,
     StockOutCreateView,
+    SupplierDetailView,
     TransactionDetailView,
     TransactionListView,
     WithdrawPendingTransactionView,
@@ -45,6 +47,17 @@ urlpatterns = [
         "transactions/<int:pk>/",
         TransactionDetailView.as_view(),
         name="transaction_detail",
+    ),
+    # 상세조회 (v0.2.2, 읽기 전용)
+    path(
+        "stock/items/<int:pk>/",
+        ManagedItemDetailView.as_view(),
+        name="managed_item_detail",
+    ),
+    path(
+        "suppliers/<int:pk>/",
+        SupplierDetailView.as_view(),
+        name="supplier_detail",
     ),
     path("adjustments/", AdjustmentRequestListView.as_view(), name="adjustment_list"),
     # 생성 화면 (TASK 16)

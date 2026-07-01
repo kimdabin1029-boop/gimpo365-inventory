@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load inventory_extras %}
+{% block title %}관리품목 상세 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>관리품목 상세</h1>
+
+<div class="card">
+  <dl class="tx-detail">
+    <dt>관리품목</dt><dd>{{ mi.item.name }} / {{ mi.department.name }} / {{ mi.get_unit_display }}</dd>
+    <dt>품목명</dt><dd>{{ mi.item.name }}{% if mi.item.specification %} <span class="muted">({{ mi.item.specification }})</span>{% endif %}</dd>
+    <dt>부서</dt><dd>{{ mi.department.name }}</dd>
+    <dt>현재고</dt><dd>{{ mi.current_stock|qty }} {{ mi.get_unit_display }} <span class="muted">(APPROVED 거래 합계)</span></dd>
+    <dt>최소재고</dt><dd>{{ mi.minimum_stock|qty }} {{ mi.get_unit_display }}</dd>
+    <dt>기본 공급업체</dt>
+    <dd>{% if mi.default_supplier %}<a href="{% url 'inventory:supplier_detail' mi.default_supplier_id %}">{{ mi.default_supplier.name }}</a>{% else %}-{% endif %}</dd>
+    <dt>보관 위치</dt><dd>{{ mi.storage_location|default:"-" }}</dd>
+    {% if mi.memo %}<dt>비고</dt><dd>{{ mi.memo|linebreaksbr }}</dd>{% endif %}
+    <dt>활성 여부</dt><dd>{% if mi.is_active %}활성{% else %}<span class="badge low">사용중지</span>{% endif %}</dd>
+    <dt>최근 입고일</dt><dd>{{ stats.last_in_at|date:"Y-m-d"|default:"-" }}</dd>
+    <dt>최근 출고일</dt><dd>{{ stats.last_out_at|date:"Y-m-d"|default:"-" }}</dd>
+    <dt>최근 주문일</dt><dd>{{ stats.last_order_date|date:"Y-m-d"|default:"-" }}</dd>
+    <dt>최근 입고 단가</dt><dd>{% if stats.last_unit_price is not None %}{{ stats.last_unit_price|qty }}{% else %}-{% endif %}</dd>
+    <dt>최근 입고 유통기한</dt><dd>{{ stats.last_expiration|date:"Y-m-d"|default:"-" }}</dd>
+  </dl>
+  <div class="form-actions">
+    <a class="back-link" href="{% url 'inventory:stock_list' %}">재고현황으로</a>
+  </div>
+</div>
+
+<h2>최근 거래 (최대 30건)</h2>
+<div class="table-wrap">
+<table class="data">
+  <thead>
+    <tr>
+      <th>거래일자</th><th>거래유형</th><th>상태</th><th class="num">수량</th>
+      <th class="num">단가</th><th>유통기한</th><th>입력자</th><th>승인자</th><th>상세</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in transactions %}
+    <tr>
+      <td>{{ t.occurred_at|date:"Y-m-d" }}</td>
+      <td>{{ t.get_transaction_type_display }}</td>
+      <td>{{ t.get_status_display }}</td>
+      <td class="num">{% if t.quantity_delta > 0 %}+{% endif %}{{ t.quantity_delta|qty }}</td>
+      <td class="num">{% if t.unit_price is not None %}{{ t.unit_price|qty }}{% else %}-{% endif %}</td>
+      <td>{{ t.expiration_date|date:"Y-m-d"|default:"-" }}</td>
+      <td>{{ t.created_by.display_name }}</td>
+      <td>{{ t.approved_by.display_name|default:"-" }}</td>
+      <td><a href="{% url 'inventory:transaction_detail' t.pk %}">상세</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="9">거래 내역이 없습니다.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>최근 주문품목 (최대 20건)</h2>
+<div class="table-wrap">
+<table class="data">
+  <thead>
+    <tr>
+      <th>주문번호</th><th>주문일자</th><th>공급업체</th>
+      <th class="num">주문수량</th><th class="num">기입고</th><th class="num">잔여수량</th><th>주문상태</th><th>상세</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for oi in order_items %}
+    <tr>
+      <td>{{ oi.order.internal_order_no }}</td>
+      <td>{{ oi.order.order_date|date:"Y-m-d" }}</td>
+      <td>{{ oi.order.supplier.name }}</td>
+      <td class="num">{{ oi.quantity|qty }}</td>
+      <td class="num">{{ oi.received_qty|qty }}</td>
+      <td class="num">{{ oi.remaining_qty|qty }}</td>
+      <td>{{ oi.order.get_status_display }}</td>
+      <td><a href="{% url 'inventory:order_detail' oi.order_id %}">상세</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="8">주문 내역이 없습니다.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

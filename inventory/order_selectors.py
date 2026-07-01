@@ -77,11 +77,11 @@ def _annotate_item_progress(qs):
 
 
 def get_order_items_with_progress(order):
-    """주문 상세용: 해당 주문의 OrderItem + 기입고/잔여 주석."""
+    """주문 상세용: 해당 주문의 OrderItem + 기입고/잔여 주석 (+ 연결 입고거래 prefetch)."""
     return _annotate_item_progress(
         order.items.select_related(
             "managed_item", "managed_item__item", "managed_item__department"
-        )
+        ).prefetch_related("stock_transactions")
     ).order_by("id")
 
 

@@ -27,7 +27,7 @@
     <tr>
       <td>{{ o.internal_order_no }}</td>
       <td>{{ o.external_order_no|default:"-" }}</td>
-      <td>{{ o.supplier.name }}</td>
+      <td><a href="{% url 'inventory:supplier_detail' o.supplier_id %}">{{ o.supplier.name }}</a></td>
       <td>{{ o.order_date|date:"Y-m-d" }}</td>
       <td>{{ o.ordered_by.display_name }}</td>
       <td>{{ o.get_status_display }}</td>

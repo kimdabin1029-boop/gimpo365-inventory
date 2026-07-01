@@ -1144,3 +1144,15 @@ StockTransaction Admin에서 add/delete를 허용하지 마라.
 - **세션**: 2시간 미사용 만료 + 매요청 갱신 + 브라우저 종료 만료.
 - 금지 유지: 주문/상태변경만으로 현재고 변경 금지, `StockTransaction.objects.create()` 직접 호출 금지, 거래 status 직접 변경 금지, 거래 삭제 금지, Admin add/delete 완화 금지.
 - 마이그레이션: `inventory/0004_stocktransaction_source_order_item_and_more.py` (source_order_item 추가 + OrderStatus choices).
+
+---
+
+## v0.2.2 변경 요약 (상세조회 · 추적성)
+
+- **관리품목 상세** `/stock/items/<pk>/`: 현재고(APPROVED 합계)·최소재고·기본 공급업체·최근 입고/출고/주문일·최근 단가 + 최근 거래 30건 + 최근 주문품목 20건.
+- **공급업체 상세** `/suppliers/<pk>/`: 활성/연락처/메모·기본공급 품목수·최근 주문/입고일·미입고 품목수 + 기본공급 품목·최근 주문·미입고 품목·최근 입고거래.
+- **거래 상세** 강화: `source_order_item` 연결 주문(주문번호/주문일/공급업체/주문수량/기입고/잔여 + 주문 상세 링크), 없으면 "연결된 주문 없음".
+- **링크**: 재고현황→관리품목/공급업체 상세, 거래이력→거래 상세, 주문 상세 품목명→관리품목 상세·공급업체→공급업체 상세·입고거래→거래 상세, 주문 목록 공급업체→공급업체 상세.
+- 조회 로직은 `inventory/detail_selectors.py` 로 분리. 권한은 view/selector 에서 검증(STAFF/TL 본인 범위, MANAGER/ADMIN 전체). 범위 밖은 404.
+- 읽기 전용: 모델/마이그레이션 변경 없음, 현재고 계산·입출고·주문 흐름 불변.
+- 테스트: 신규 tests_v022 추가, 전체 통과.
