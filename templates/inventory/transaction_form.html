@@ -77,11 +77,19 @@
   }
   if (select.value) input.value = candLabel(selectedOption());
 
+  // 부서 필터 (MANAGER/ADMIN 화면에만 존재). 선택 시 해당 부서 후보만 노출한다.
+  // 서버 권한 범위는 그대로이며(옵션은 이미 접근 가능한 품목뿐), 화면 후보만 좁힌다.
+  var deptSelect = document.getElementById("id_department");
+  function deptFilterValue() { return deptSelect ? deptSelect.value : ""; }
+  function optDeptId(opt) { return opt.getAttribute("data-dept-id") || ""; }
+
   function render(q) {
     list.innerHTML = "";
     var count = 0;
+    var dept = deptFilterValue();
     Array.prototype.forEach.call(select.options, function (opt) {
       if (!opt.value) return;
+      if (dept && optDeptId(opt) !== dept) return;  // 부서 필터
       var hay = (
         (opt.getAttribute("data-name") || opt.text) + " " +
         (opt.getAttribute("data-dept") || "") + " " +
@@ -107,6 +115,20 @@
   input.addEventListener("input", function () { render(input.value.trim().toLowerCase()); });
   input.addEventListener("focus", function () { render(input.value.trim().toLowerCase()); });
   input.addEventListener("blur", function () { setTimeout(function () { list.hidden = true; }, 150); });
+
+  // 부서 필터 변경: 선택 품목이 필터 부서와 다르면 선택을 비우고, 후보를 다시 그린다.
+  if (deptSelect) {
+    deptSelect.addEventListener("change", function () {
+      var dept = deptFilterValue();
+      var cur = selectedOption();
+      if (dept && cur && cur.value && optDeptId(cur) !== dept) {
+        select.value = "";
+        input.value = "";
+        select.dispatchEvent(new Event("change"));
+      }
+      render(input.value.trim().toLowerCase());
+    });
+  }
 
   // 선택 정보 패널
   var info = document.getElementById("mi-info");

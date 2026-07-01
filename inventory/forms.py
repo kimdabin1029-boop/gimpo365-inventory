@@ -107,6 +107,7 @@ class ManagedItemSelect(forms.Select):
                     "data-unit": data["unit"],
                     "data-name": data["name"],
                     "data-dept": data["dept"],
+                    "data-dept-id": data["dept_id"],
                     # mode: 승인 초기재고 없으면 "initial"(최초 재고 입력), 있으면 "adjustment"
                     "data-mode": data["mode"],
                     # 기본 공급업체(있으면) → 입고 화면에서 공급업체 초기값 자동 선택용 (v0.1.2)
@@ -184,12 +185,33 @@ def _set_managed_item_with_stock(form, user):
             "unit": mi.get_unit_display(),
             "name": mi.item.name,
             "dept": mi.department.name,
+            "dept_id": str(mi.department_id),
             "mode": "adjustment" if mi._has_initial else "initial",
             # 기본 공급업체 pk/이름 (없으면 빈 문자열) — 입고 화면 초기값 자동 선택용
             "supplier": str(mi.default_supplier_id or ""),
             "supplier_name": mi.default_supplier.name if mi.default_supplier_id else "",
         }
     field.widget.stock_map = stock_map
+
+
+def _add_department_filter(form, user):
+    """입고/출고/실사조정 화면의 관리품목 자동완성 후보를 부서로 좁히는 필터. (v0.2.2)
+
+    - MANAGER/ADMIN 에게만 부서 필터를 추가한다.
+    - STAFF/TEAM_LEADER 에게는 추가하지 않는다.
+    - 이 필드는 화면 UX(자동완성 후보 좁히기)용이며 service 로 전달되지 않는다.
+      managed_item queryset 은 여전히 get_accessible_managed_items 범위이므로
+      서버 권한 범위는 넓어지지 않는다.
+    """
+    if user is None or not has_role_at_least(user, Role.MANAGER):
+        return
+    form.fields["department"] = forms.ModelChoiceField(
+        label="부서 필터",
+        queryset=Department.objects.filter(active_for_inventory=True),
+        required=False,
+    )
+    # 부서 필터를 관리품목 위에 배치
+    form.order_fields(["department", "managed_item"])
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +263,7 @@ class StockInForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.user = user
         _set_managed_item_with_stock(self, user)
+        _add_department_filter(self, user)
 
     def clean_quantity(self):
         value = self.cleaned_data.get("quantity")
@@ -287,6 +310,7 @@ class StockOutForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.user = user
         _set_managed_item_with_stock(self, user)
+        _add_department_filter(self, user)
 
     def clean_quantity(self):
         value = self.cleaned_data.get("quantity")
@@ -328,6 +352,7 @@ class AdjustmentRequestForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.user = user
         _set_managed_item_with_stock(self, user)
+        _add_department_filter(self, user)
 
     def clean_actual_quantity(self):
         value = self.cleaned_data.get("actual_quantity")
