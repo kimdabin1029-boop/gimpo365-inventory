@@ -35,7 +35,7 @@
         <tbody>
           {% for item in low_stock_items %}
           <tr>
-            <td class="col-name">{{ item.item.name }}</td>
+            <td class="col-name"><a href="{% url 'inventory:managed_item_detail' item.pk %}">{{ item.item.name }}</a></td>
             <td class="col-dept">{{ item.department.name }}</td>
             <td class="num">{{ item.current_stock|qty }} {{ item.get_unit_display }}</td>
             <td class="num">{{ item.minimum_stock|qty }} {{ item.get_unit_display }}</td>
@@ -74,7 +74,7 @@
           {% for o in unreceived_orders %}
           <tr>
             <td><a href="{% url 'inventory:order_detail' o.pk %}">{{ o.internal_order_no }}</a></td>
-            <td>{{ o.supplier.name }}</td>
+            <td><a href="{% url 'inventory:supplier_detail' o.supplier_id %}">{{ o.supplier.name }}</a></td>
             <td>{{ o.order_date|date:"Y-m-d" }}</td>
             <td>{{ o.ordered_by.display_name }}</td>
             <td class="num">{{ o.item_count }}</td>
@@ -92,27 +92,5 @@
   {% endif %}
 </section>
 
-<h2>작업</h2>
-<section class="action-grid">
-  <a class="action-card primary" href="{% url 'inventory:stock_in_new' %}"
-     title="사입되었거나 새로 들어온 물건을 기록합니다.">입고 등록</a>
-  <a class="action-card primary" href="{% url 'inventory:stock_out_new' %}"
-     title="사용, 소모, 폐기, 분실, 증정 등을 기록합니다.">출고 등록</a>
-  {% if can_request_adjustment %}
-    <a class="action-card" href="{% url 'inventory:adjustment_new' %}"
-       title="최초 재고 입력 또는 실사조정을 요청합니다. (팀장 이상)">실사조정 요청</a>
-  {% endif %}
-  <a class="action-card" href="{% url 'inventory:stock_list' %}"
-     title="부서별 현재 재고와 부족 품목을 확인합니다.">재고현황</a>
-  <a class="action-card" href="{% url 'inventory:stock_list' %}?filter=low_stock"
-     title="현재고가 최소재고 이하인 발주 후보 품목을 확인합니다.">최소재고 이하 품목</a>
-  <a class="action-card" href="{% url 'inventory:transaction_list' %}"
-     title="입고, 출고, 조정, 취소 기록을 확인합니다.">거래이력</a>
-  <a class="action-card" href="{% url 'inventory:adjustment_list' %}"
-     title="실사조정 요청의 처리 결과와 사유를 확인합니다.">실사조정 내역</a>
-  {% if is_manager %}
-    <a class="action-card" href="{% url 'inventory:pending_list' %}"
-       title="승인 대기 중인 초기재고/실사조정을 승인·반려합니다.">승인 대기 큐</a>
-  {% endif %}
-</section>
+{# v0.2.2-hotfix: 대시보드 '작업' 버튼 영역 제거. 입고/출고/실사조정/주문 진입은 좌측 퀵메뉴에서만 제공. #}
 {% endblock %}

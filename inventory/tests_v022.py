@@ -164,3 +164,48 @@ class DetailLinkTest(DetailFixture, BaseFixtureTestCase):
         self.assertContains(
             resp, reverse("inventory:supplier_detail", args=[self.sup_a.pk])
         )
+
+
+class HotfixNavTest(DetailFixture, BaseFixtureTestCase):
+    """v0.2.2-hotfix: 거래이력 품목 링크 / 대시보드 작업버튼 제거 / 대시보드 상세 링크."""
+
+    # 1. 거래이력 목록에서 품목명 → 관리품목 상세 링크
+    def test_transaction_list_item_links_to_managed_item_detail(self):
+        create_stock_in(user=self.staff_skin, managed_item=self.mi_skin, quantity=5)
+        self.client.force_login(self.staff_skin)
+        resp = self.client.get(reverse("inventory:transaction_list"))
+        self.assertContains(
+            resp, reverse("inventory:managed_item_detail", args=[self.mi_skin.pk])
+        )
+
+    # 2. 거래 상세 링크도 기존대로 유지
+    def test_transaction_list_keeps_detail_link(self):
+        create_stock_in(user=self.staff_skin, managed_item=self.mi_skin, quantity=5)
+        self.client.force_login(self.staff_skin)
+        resp = self.client.get(reverse("inventory:transaction_list"))
+        self.assertContains(resp, 'class="detail-action"')
+
+    # 3. 대시보드 '작업' 버튼 영역 제거
+    def test_dashboard_action_buttons_removed(self):
+        self.client.force_login(self.staff_skin)
+        resp = self.client.get(reverse("inventory:dashboard"))
+        self.assertNotContains(resp, "action-grid")
+        self.assertNotContains(resp, "<h2>작업</h2>")
+
+    # 4. 대시보드 최소재고 이하 품목 → 관리품목 상세 이동
+    def test_dashboard_low_stock_links_to_detail(self):
+        # mi_skin: 최소재고 5, 현재고 0 → 최소재고 이하로 대시보드 노출
+        self.client.force_login(self.staff_skin)
+        resp = self.client.get(reverse("inventory:dashboard"))
+        self.assertContains(
+            resp, reverse("inventory:managed_item_detail", args=[self.mi_skin.pk])
+        )
+
+    # 5. 대시보드 미입고 주문 → 공급업체/주문 상세 이동
+    def test_dashboard_unreceived_links(self):
+        add_to_cart(user=self.staff_skin, managed_item=self.mi_skin, supplier=self.sup_a, quantity=3)
+        order = confirm_order(user=self.staff_skin)[0]
+        self.client.force_login(self.staff_skin)
+        resp = self.client.get(reverse("inventory:dashboard"))
+        self.assertContains(resp, reverse("inventory:order_detail", args=[order.pk]))
+        self.assertContains(resp, reverse("inventory:supplier_detail", args=[self.sup_a.pk]))
