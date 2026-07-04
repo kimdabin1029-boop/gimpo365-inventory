@@ -70,9 +70,13 @@ def add_years_date(d, years):
         return d.replace(year=d.year + years, day=28)
 
 
-def _qty_widget(*, allow_zero: bool):
-    """수량 입력 위젯. 상하 버튼 step=1 (실무 정수 단위). 소수 직접 입력은 가능."""
-    attrs = {"step": "1"}
+def _qty_widget(*, allow_zero: bool, step: str = "1"):
+    """수량 입력 위젯. 기본 step=1 (실무 정수 단위).
+
+    min_value 를 소수로 둔 필드(예: 주문서 기반 입고수량 min 0.001)에서는 step 도
+    소수로 맞춰야 브라우저의 "가장 근접한 유효 값" 오류가 나지 않는다. (step="0.001")
+    """
+    attrs = {"step": step}
     if allow_zero:
         attrs["min"] = "0"
     return forms.NumberInput(attrs=attrs)
@@ -610,7 +614,7 @@ class OrderItemStockInForm(forms.Form):
 
     quantity_input = forms.DecimalField(
         label="입고수량", max_digits=12, decimal_places=3,
-        min_value=Decimal("0.001"), widget=_qty_widget(allow_zero=False),
+        min_value=Decimal("0.001"), widget=_qty_widget(allow_zero=False, step="0.001"),
     )
     occurred_at = _trade_date_field("입고일자")
     unit_price = forms.DecimalField(

@@ -334,3 +334,70 @@ class SessionSettingsTest(BaseFixtureTestCase):
         self.assertEqual(settings.SESSION_COOKIE_AGE, 60 * 60 * 2)
         self.assertTrue(settings.SESSION_SAVE_EVERY_REQUEST)
         self.assertTrue(settings.SESSION_EXPIRE_AT_BROWSER_CLOSE)
+
+
+class OrderInboundQuantityHotfixTest(OrderInboundFixture, BaseFixtureTestCase):
+    """HOTFIX: 주문서 기반 입고수량 input step/min 정합성 + 기본값 제출 정상화."""
+
+    def _form_data(self, quantity):
+        return {
+            "quantity_input": quantity,
+            "occurred_at": timezone.localdate().strftime("%Y-%m-%d"),
+            "unit_price": "1000",
+            "no_expiration": "on",
+        }
+
+    # Form: 입고수량 2 / 1 / 0.001 모두 유효해야 한다 (form 은 잔여수량과 무관, 단가/유통기한 검증)
+    def test_form_accepts_integer_and_decimal_quantities(self):
+        from inventory.forms import OrderItemStockInForm
+        for q in ("2", "1", "0.001"):
+            form = OrderItemStockInForm(data=self._form_data(q))
+            self.assertTrue(form.is_valid(), f"{q}: {form.errors}")
+
+    # 템플릿: 입고수량 input 의 step/min 이 정합적이어야 한다 (step=1 아님)
+    def test_order_detail_input_step_and_min(self):
+        order = self._order(items=((2,),))
+        self.client.force_login(self.staff_skin)
+        resp = self.client.get(reverse("inventory:order_detail", args=[order.pk]))
+        html = resp.content.decode()
+        self.assertIn('name="quantity_input"', html)
+        self.assertIn('step="0.001"', html)
+        self.assertIn('min="0.001"', html)
+        self.assertNotIn('name="quantity_input" value="2" min="0.001" step="1"', html)
+
+    # 재현: 잔여수량 2 기본값 그대로 제출 → 정상 입고 (오류 없이 재고 +2)
+    def test_default_remaining_value_submits_ok(self):
+        order = self._order(items=((2,),))
+        oi = order.items.first()
+        self.client.force_login(self.staff_skin)
+        resp = self.client.post(
+            reverse("inventory:order_item_stock_in", args=[oi.pk]),
+            data=self._form_data("2"),
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(get_current_stock(self.mi1), Decimal("2"))
+        self.assertEqual(remaining_quantity(oi), Decimal("0"))
+
+    # 소수 잔여수량도 기본값 제출 정상 (예: 1.5)
+    def test_decimal_remaining_value_submits_ok(self):
+        order = self._order(items=((Decimal("1.5"),),))
+        oi = order.items.first()
+        self.client.force_login(self.staff_skin)
+        resp = self.client.post(
+            reverse("inventory:order_item_stock_in", args=[oi.pk]),
+            data=self._form_data("1.5"),
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(get_current_stock(self.mi1), Decimal("1.5"))
+
+    # 회귀: 잔여수량 초과 입고는 계속 차단
+    def test_over_remaining_still_blocked(self):
+        order = self._order(items=((2,),))
+        oi = order.items.first()
+        self.client.force_login(self.staff_skin)
+        resp = self.client.post(
+            reverse("inventory:order_item_stock_in", args=[oi.pk]),
+            data=self._form_data("3"),
+        )
+        self.assertEqual(resp.status_code, 302)  # 상세로 리다이렉트(에러 메시지)
+        self.assertEqual(get_current_stock(self.mi1), Decimal("0"))  # 미생성
