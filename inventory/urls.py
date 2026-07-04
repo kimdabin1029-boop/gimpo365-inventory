@@ -23,6 +23,7 @@ from inventory.views import (
     OrderCancelView,
     OrderConfirmView,
     OrderDetailView,
+    OrderItemCloseView,
     OrderItemStockInView,
     OrderListView,
     PendingTransactionListView,
@@ -104,5 +105,10 @@ urlpatterns = [
         "order-items/<int:pk>/stock-in/",
         OrderItemStockInView.as_view(),
         name="order_item_stock_in",
+    ),
+    path(
+        "order-items/<int:pk>/close/",
+        OrderItemCloseView.as_view(),
+        name="order_item_close",
     ),
 ]

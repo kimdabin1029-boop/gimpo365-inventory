@@ -25,6 +25,7 @@ from inventory.models import (
     OrderCart,
     OrderItem,
     OrderStatus,
+    RemainingCloseReason,
 )
 from inventory.order_selectors import received_quantity, remaining_quantity
 from inventory.permissions import can_access_managed_item
@@ -158,20 +159,27 @@ def remove_cart_item(*, user, cart_item_id):
 # 주문 확정 service
 # ---------------------------------------------------------------------------
 @transaction.atomic
-def confirm_order(*, user, order_date=None, external_order_no="", memo=""):
-    """장바구니를 공급업체별로 분리해 Order/OrderItem 을 생성한다. (v0.2.0)
+def confirm_order(*, user, order_date=None, external_order_no="", memo="", cart_item_ids=None):
+    """장바구니를 공급업체별로 분리해 Order/OrderItem 을 생성한다. (v0.2.0 / v0.2.2)
 
     - 공급업체별로 Order 1건 생성 (각 Order 는 단일 supplier).
     - 생성 상태는 ORDERED. 현재고는 변경하지 않는다.
-    - 확정 후 장바구니는 비운다.
     - 공급업체가 지정되지 않은 항목이 있으면 차단(각 Order 는 supplier 필수).
+    - cart_item_ids 가 주어지면 그 항목만 주문 확정하고 그 항목만 장바구니에서 제거한다.
+      (선택되지 않은 항목은 그대로 유지) None 이면 전체 장바구니를 확정한다.
+      cart.items 로 조회하므로 본인 장바구니 항목만 대상이 된다(권한 범위 불변).
     """
     cart = get_or_create_cart(user)
-    items = list(
-        cart.items.select_related("managed_item", "supplier").order_by("id")
-    )
-    if not items:
-        raise OrderError("장바구니가 비어 있어 주문을 확정할 수 없습니다.")
+    items_qs = cart.items.select_related("managed_item", "supplier").order_by("id")
+    if cart_item_ids is not None:
+        ids = [int(i) for i in cart_item_ids]
+        items = list(items_qs.filter(pk__in=ids))
+        if not items:
+            raise OrderError("선택한 장바구니 항목이 없습니다. 주문할 항목을 선택해주세요.")
+    else:
+        items = list(items_qs)
+        if not items:
+            raise OrderError("장바구니가 비어 있어 주문을 확정할 수 없습니다.")
 
     missing = [ci for ci in items if ci.supplier_id is None]
     if missing:
@@ -209,7 +217,8 @@ def confirm_order(*, user, order_date=None, external_order_no="", memo=""):
             )
         created.append(order)
 
-    cart.items.all().delete()
+    # 확정한 항목만 장바구니에서 제거 (선택되지 않은 항목은 그대로 유지)
+    cart.items.filter(pk__in=[ci.pk for ci in items]).delete()
     return created
 
 
@@ -331,13 +340,16 @@ def recompute_order_status(order, *, by_user=None):
     items = list(order.items.all())
     total_received = sum((received_quantity(i) for i in items), Decimal("0"))
     total_remaining = sum((remaining_quantity(i) for i in items), Decimal("0"))
+    total_closed = sum((i.remaining_closed_quantity for i in items), Decimal("0"))
 
-    if total_received <= 0:
-        new_status = OrderStatus.ORDERED
-    elif total_remaining <= 0:
+    # 미처리잔여(=remaining_quantity)가 모두 0 이면 완료 계열(RECEIVED).
+    # 잔여마감만으로 완료된 경우도 표시상 RECEIVED 로 둔다(상태값 대규모 변경 회피, v0.2.2).
+    if total_remaining <= 0:
         new_status = OrderStatus.RECEIVED
-    else:
+    elif total_received > 0 or total_closed > 0:
         new_status = OrderStatus.PARTIALLY_RECEIVED
+    else:
+        new_status = OrderStatus.ORDERED
 
     fields = []
     if new_status != order.status:
@@ -416,3 +428,68 @@ def create_stock_in_from_order_item(
     # 7) 주문 전체 상태 재계산
     recompute_order_status(order, by_user=user)
     return tx
+
+
+# ---------------------------------------------------------------------------
+# 미입고 잔여마감 (v0.2.2) — 재고 증감 아님. StockTransaction 생성하지 않는다.
+# ---------------------------------------------------------------------------
+_CLOSE_REASONS = {c for c, _ in RemainingCloseReason.choices}
+
+
+@transaction.atomic
+def close_remaining(*, user, order_item, quantity, reason, memo=""):
+    """OrderItem 의 미처리잔여를 입고 없이 마감 처리한다. (v0.2.2)
+
+    - 재고 증감이 아니다. StockTransaction 을 만들지 않으며 현재고를 바꾸지 않는다.
+    - 마감수량 > 0, 마감수량 <= 미처리잔여, 마감사유 필수.
+    - 취소된 주문/이미 미처리잔여 0 인 품목은 마감 불가.
+    - 권한: 연결 관리품목 접근 범위(입고등록과 동일, 범위 확대 없음).
+    """
+    mi = order_item.managed_item
+    if not can_access_managed_item(user, mi):
+        raise PermissionDeniedError("해당 주문 품목을 잔여마감할 권한이 없습니다.")
+
+    if not reason or str(reason).strip() == "":
+        raise OrderError("잔여마감 사유는 필수입니다.")
+    if reason not in _CLOSE_REASONS:
+        raise OrderError("잘못된 잔여마감 사유입니다.")
+
+    qty = _to_positive_quantity(quantity)
+
+    locked = (
+        OrderItem.objects.select_for_update()
+        .select_related("order")
+        .get(pk=order_item.pk)
+    )
+    order = locked.order  # 최신 상태 (취소 여부 재확인)
+    if order.status == OrderStatus.CANCELED:
+        raise OrderError("취소된 주문의 품목은 잔여마감할 수 없습니다.")
+
+    unprocessed = remaining_quantity(locked)  # 미처리잔여
+    if unprocessed <= 0:
+        raise OrderError("이미 입고완료(또는 마감)된 품목은 잔여마감할 수 없습니다.")
+    if qty > unprocessed:
+        raise OrderError(
+            f"마감수량이 미처리잔여({unprocessed})보다 많습니다."
+        )
+
+    locked.remaining_closed_quantity = locked.remaining_closed_quantity + qty
+    locked.remaining_closed_reason = reason
+    if memo:
+        locked.remaining_closed_memo = memo
+    locked.remaining_closed_by = user
+    locked.remaining_closed_at = timezone.now()
+    locked.save(
+        update_fields=[
+            "remaining_closed_quantity",
+            "remaining_closed_reason",
+            "remaining_closed_memo",
+            "remaining_closed_by",
+            "remaining_closed_at",
+            "updated_at",
+        ]
+    )
+
+    # 주문 전체 상태 재계산 (재고와 무관, 표시용)
+    recompute_order_status(order, by_user=user)
+    return locked

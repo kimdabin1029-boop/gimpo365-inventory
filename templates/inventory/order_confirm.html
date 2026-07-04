@@ -35,6 +35,9 @@
   <div class="card form-card">
     <form method="post" action="{% url 'inventory:order_confirm' %}">
       {% csrf_token %}
+      {# 선택 주문 모드/선택 항목을 확정 POST 로 전달 (전체 모드면 mode=all) #}
+      <input type="hidden" name="mode" value="{{ mode }}">
+      {% for id in selected_ids %}<input type="hidden" name="cart_items" value="{{ id }}">{% endfor %}
       {{ form.as_p }}
       <div class="form-actions">
         <button type="submit" onclick="return confirm('공급업체별로 {{ groups|length }}건의 주문을 생성합니다. 확정할까요?');">주문 확정</button>

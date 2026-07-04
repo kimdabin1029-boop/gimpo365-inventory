@@ -38,7 +38,10 @@
       <td class="num">{{ oi.received_qty|qty }}</td>
       <td class="num">{{ oi.remaining_qty|qty }}</td>
       <td>{{ oi.order.ordered_by.display_name }}</td>
-      <td><a href="{% url 'inventory:order_detail' oi.order_id %}">입고등록 →</a></td>
+      <td>
+        <a href="{% url 'inventory:order_detail' oi.order_id %}">입고등록</a>
+        · <a href="{% url 'inventory:order_item_close' oi.pk %}">잔여마감</a>
+      </td>
     </tr>
     {% endwith %}
     {% empty %}

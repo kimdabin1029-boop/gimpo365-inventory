@@ -28,6 +28,7 @@ from inventory.forms import (
     OrderItemStockInForm,
     PendingTransactionFilterForm,
     RejectTransactionForm,
+    RemainingCloseForm,
     StockFilterForm,
     StockInForm,
     StockOutForm,
@@ -63,11 +64,13 @@ from inventory.order_selectors import (
     get_orders,
     get_pending_order_items,
     get_unreceived_orders,
+    remaining_quantity,
 )
 from inventory.order_services import (
     add_to_cart,
     can_manage_order,
     cancel_order,
+    close_remaining,
     confirm_order,
     create_stock_in_from_order_item,
     get_or_create_cart,
@@ -794,49 +797,57 @@ class CartItemRemoveView(LoginRequiredMixin, View):
 
 
 class OrderConfirmView(LoginRequiredMixin, View):
-    """주문 확정 화면. GET=공급업체별 확인, POST=확정. (v0.2.0)"""
+    """주문 확정 화면. GET=공급업체별 확인, POST=확정. (v0.2.0 / v0.2.2)
+
+    mode=selected 이면 선택한 장바구니 항목(cart_items)만, 그 외에는 전체를 확정한다.
+    선택 항목은 본인 장바구니(cart.items) 안에서만 조회되므로 권한 범위는 넓어지지 않는다.
+    """
 
     template_name = "inventory/order_confirm.html"
 
-    def _groups(self, request):
+    def _resolve_ids(self, request):
+        src = request.POST if request.method == "POST" else request.GET
+        if src.get("mode") == "selected":
+            return src.getlist("cart_items")  # 선택 id 목록(빈 리스트 가능)
+        return None  # 전체 주문
+
+    def _groups(self, request, ids):
         cart = get_or_create_cart(request.user)
-        items = list(
-            cart.items.select_related(
-                "managed_item", "managed_item__item", "supplier"
-            ).order_by("id")
-        )
+        qs = cart.items.select_related(
+            "managed_item", "managed_item__item", "supplier"
+        ).order_by("id")
+        if ids is not None:
+            qs = qs.filter(pk__in=[int(i) for i in ids if str(i).isdigit()])
+        items = list(qs)
         groups = {}
         for ci in items:
-            key = ci.supplier_id
-            groups.setdefault(key, {"supplier": ci.supplier, "items": []})
-            groups[key]["items"].append(ci)
+            groups.setdefault(ci.supplier_id, {"supplier": ci.supplier, "items": []})
+            groups[ci.supplier_id]["items"].append(ci)
         return items, list(groups.values())
 
+    def _context(self, request, ids, form):
+        items, groups = self._groups(request, ids)
+        return {
+            "items": items,
+            "groups": groups,
+            "form": form,
+            "has_missing_supplier": any(i.supplier_id is None for i in items),
+            "selected_ids": ids if ids is not None else [],
+            "mode": "selected" if ids is not None else "all",
+        }
+
     def get(self, request, *args, **kwargs):
-        items, groups = self._groups(request)
-        return render(
-            request,
-            self.template_name,
-            {
-                "items": items,
-                "groups": groups,
-                "form": ConfirmOrderForm(),
-                "has_missing_supplier": any(i.supplier_id is None for i in items),
-            },
-        )
+        ids = self._resolve_ids(request)
+        if ids is not None and len(ids) == 0:
+            messages.error(request, "주문할 항목을 선택해주세요.")
+            return redirect(reverse("inventory:cart"))
+        return render(request, self.template_name, self._context(request, ids, ConfirmOrderForm()))
 
     def post(self, request, *args, **kwargs):
+        ids = self._resolve_ids(request)
         form = ConfirmOrderForm(request.POST)
-        items, groups = self._groups(request)
         if not form.is_valid():
-            return render(
-                request,
-                self.template_name,
-                {
-                    "items": items, "groups": groups, "form": form,
-                    "has_missing_supplier": any(i.supplier_id is None for i in items),
-                },
-            )
+            return render(request, self.template_name, self._context(request, ids, form))
         cd = form.cleaned_data
         try:
             orders = confirm_order(
@@ -844,6 +855,7 @@ class OrderConfirmView(LoginRequiredMixin, View):
                 order_date=cd.get("order_date"),
                 external_order_no=cd.get("external_order_no", ""),
                 memo=cd.get("memo", ""),
+                cart_item_ids=ids,
             )
         except InventoryError as exc:
             messages.error(request, str(exc))
@@ -933,6 +945,56 @@ class OrderItemStockInView(LoginRequiredMixin, View):
             messages.error(request, str(exc))
             return redirect(detail_url)
         messages.success(request, "입고등록이 완료되었습니다. (재고가 증가했습니다)")
+        return redirect(detail_url)
+
+
+class OrderItemCloseView(LoginRequiredMixin, View):
+    """미입고 잔여마감. GET=확인 폼, POST=마감. 재고 변경 없음. (v0.2.2)"""
+
+    template_name = "inventory/order_item_close.html"
+
+    def _get_item(self, request, pk):
+        oi = get_order_item_for_user_or_none(request.user, pk)
+        if oi is None:
+            raise Http404("주문 품목을 찾을 수 없습니다.")
+        return oi
+
+    def get(self, request, *args, **kwargs):
+        oi = self._get_item(request, kwargs["pk"])
+        remaining = remaining_quantity(oi)
+        return render(
+            request,
+            self.template_name,
+            {
+                "oi": oi,
+                "remaining": remaining,
+                "form": RemainingCloseForm(initial={"quantity": remaining}),
+            },
+        )
+
+    def post(self, request, *args, **kwargs):
+        oi = self._get_item(request, kwargs["pk"])
+        detail_url = reverse("inventory:order_detail", args=[oi.order_id])
+        form = RemainingCloseForm(request.POST)
+        if not form.is_valid():
+            return render(
+                request,
+                self.template_name,
+                {"oi": oi, "remaining": remaining_quantity(oi), "form": form},
+            )
+        cd = form.cleaned_data
+        try:
+            close_remaining(
+                user=request.user,
+                order_item=oi,
+                quantity=cd["quantity"],
+                reason=cd["reason"],
+                memo=cd.get("memo", ""),
+            )
+        except InventoryError as exc:
+            messages.error(request, str(exc))
+            return redirect(detail_url)
+        messages.success(request, "미입고 잔여를 마감 처리했습니다. (현재고는 변경되지 않습니다)")
         return redirect(detail_url)
 
 

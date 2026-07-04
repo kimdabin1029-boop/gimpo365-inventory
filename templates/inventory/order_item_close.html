@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% load inventory_extras %}
+{% block title %}미입고 잔여마감 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>미입고 잔여마감</h1>
+
+<div class="card">
+  <p>
+    <strong>{{ oi.managed_item.item.name }}</strong>
+    <span class="muted">／ {{ oi.managed_item.department.name }} ／ {{ oi.managed_item.get_unit_display }}</span>
+  </p>
+  <p class="muted">주문번호 {{ oi.order.internal_order_no }} · 공급업체 {{ oi.order.supplier.name }}</p>
+  <p>미처리잔여 <strong>{{ remaining|qty }}</strong> {{ oi.managed_item.get_unit_display }}</p>
+  <p class="muted">잔여마감은 재고를 변경하지 않습니다(입고 거래를 만들지 않음). 더 이상 입고되지 않을 수량을 정리하는 표시입니다.</p>
+
+  <form method="post" action="{% url 'inventory:order_item_close' oi.pk %}" class="form-card">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="form-actions">
+      <button type="submit" class="danger">잔여마감 처리</button>
+      <a class="back-link" href="{% url 'inventory:order_detail' oi.order_id %}">주문 상세로</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

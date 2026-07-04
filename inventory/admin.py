@@ -133,8 +133,8 @@ class StockTransactionAdmin(admin.ModelAdmin):
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
-    fields = ["managed_item", "quantity", "memo"]
-    readonly_fields = ["managed_item", "quantity", "memo"]
+    fields = ["managed_item", "quantity", "memo", "remaining_closed_quantity", "remaining_closed_reason"]
+    readonly_fields = ["managed_item", "quantity", "memo", "remaining_closed_quantity", "remaining_closed_reason"]
     can_delete = False
 
     def has_add_permission(self, request, obj=None):

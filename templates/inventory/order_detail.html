@@ -50,22 +50,34 @@
   <p class="order-item-progress">
     주문수량 <strong>{{ oi.quantity|qty }}</strong>
     · 기입고 <strong>{{ oi.received_qty|qty }}</strong>
-    · 잔여 <strong>{{ oi.remaining_qty|qty }}</strong>
+    {% if oi.remaining_closed_quantity > 0 %}· 잔여마감 <strong>{{ oi.remaining_closed_quantity|qty }}</strong>{% endif %}
+    · 미처리잔여 <strong>{{ oi.remaining_qty|qty }}</strong>
     ·
-    {% if oi.received_qty <= 0 %}
-      <span class="badge low">미입고</span>
-    {% elif oi.remaining_qty <= 0 %}
-      <span class="badge ok">입고완료</span>
+    {% if oi.remaining_qty > 0 %}
+      {% if oi.received_qty > 0 or oi.remaining_closed_quantity > 0 %}
+        <span class="badge low">부분입고</span>
+      {% else %}
+        <span class="badge low">미입고</span>
+      {% endif %}
+    {% elif oi.remaining_closed_quantity > 0 %}
+      <span class="badge closed">잔여마감</span>
     {% else %}
-      <span class="badge low">부분입고</span>
+      <span class="badge ok">입고완료</span>
     {% endif %}
   </p>
+  {% if oi.remaining_closed_quantity > 0 %}
+  <p class="muted order-item-closed">잔여마감 {{ oi.remaining_closed_quantity|qty }}
+    · 사유 {{ oi.get_remaining_closed_reason_display|default:"-" }}
+    {% if oi.remaining_closed_by %}· 처리 {{ oi.remaining_closed_by.display_name }} ({{ oi.remaining_closed_at|date:"Y-m-d H:i" }}){% endif %}
+    {% if oi.remaining_closed_memo %}· 메모 {{ oi.remaining_closed_memo }}{% endif %}
+  </p>
+  {% endif %}
 
   {% if oi.remaining_qty > 0 and order.status != 'CANCELED' %}
   <form method="post" action="{% url 'inventory:order_item_stock_in' oi.pk %}" class="inbound-form">
     {% csrf_token %}
     <label>입고수량
-      <input type="number" name="quantity_input" value="{{ oi.remaining_qty|qty }}" min="0.001" step="0.001" max="{{ oi.remaining_qty|qty }}" required>
+      <input type="number" name="quantity_input" value="{{ oi.remaining_qty|plain }}" min="0.001" step="0.001" max="{{ oi.remaining_qty|plain }}" required>
     </label>
     <label>입고일자
       <input type="date" name="occurred_at" value="{{ today|date:'Y-m-d' }}" required>
@@ -88,8 +100,11 @@
     유통기한이 표시되지 않은 품목은 [유통기한 없음]을 선택하세요. 선택 시 입고일로부터 3년 뒤 날짜가 자동 입력됩니다.
     3년 이상 출고되지 않은 물품은 장기 미사용/재고 점검 대상으로 확인합니다.
   </p>
+  <p class="order-item-actions">
+    <a class="cancel-action" href="{% url 'inventory:order_item_close' oi.pk %}">미입고 잔여마감</a>
+  </p>
   {% else %}
-    <p class="muted">입고완료 — 추가 입고등록이 필요하지 않습니다.</p>
+    <p class="muted">추가 입고등록이 필요하지 않습니다.</p>
   {% endif %}
 </section>
 {% endfor %}

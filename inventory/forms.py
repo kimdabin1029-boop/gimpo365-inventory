@@ -22,6 +22,7 @@ from inventory.models import (
     ItemCategory,
     ManagedItem,
     OrderStatus,
+    RemainingCloseReason,
     StockTransaction,
     Supplier,
     TransactionStatus,
@@ -652,6 +653,29 @@ class OrderItemStockInForm(forms.Form):
                 "유통기한은 필수입니다. 표시가 없는 품목은 '유통기한 없음'을 선택하세요.",
             )
         return cleaned
+
+
+class RemainingCloseForm(forms.Form):
+    """미입고 잔여마감 Form. (v0.2.2)
+
+    마감수량 기본값(미처리잔여)은 view 에서 initial 로 채운다. 마감사유 필수.
+    잔여마감은 재고 증감이 아니며 service 에서 미처리잔여 초과/취소주문 등을 검증한다.
+    """
+
+    quantity = forms.DecimalField(
+        label="마감수량", max_digits=12, decimal_places=3,
+        min_value=Decimal("0.001"), widget=_qty_widget(allow_zero=False, step="0.001"),
+    )
+    reason = forms.ChoiceField(label="마감사유", choices=RemainingCloseReason.choices)
+    memo = forms.CharField(
+        label="메모", required=False, widget=forms.Textarea(attrs={"rows": 2})
+    )
+
+    def clean_quantity(self):
+        value = self.cleaned_data.get("quantity")
+        if value is None or value <= 0:
+            raise forms.ValidationError("마감수량은 0보다 커야 합니다.")
+        return value
 
 
 class OrderFilterForm(forms.Form):

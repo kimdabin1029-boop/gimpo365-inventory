@@ -59,12 +59,20 @@ def received_quantity(order_item) -> Decimal:
 
 
 def remaining_quantity(order_item) -> Decimal:
-    """OrderItem 잔여 수량 = 주문수량 - 기입고 수량."""
-    return order_item.quantity - received_quantity(order_item)
+    """OrderItem 미처리잔여 = 주문수량 - 기입고 - 잔여마감수량. (v0.2.2)
+
+    잔여마감(remaining_closed_quantity)은 입고 없이 마감 처리한 수량으로, 미처리잔여와
+    입고대기 대상에서 제외된다. (재고와 무관)
+    """
+    return (
+        order_item.quantity
+        - received_quantity(order_item)
+        - order_item.remaining_closed_quantity
+    )
 
 
 def _annotate_item_progress(qs):
-    """OrderItem queryset 에 received_qty / remaining_qty 주석."""
+    """OrderItem queryset 에 received_qty / remaining_qty(미처리잔여) 주석."""
     return qs.annotate(
         received_qty=Coalesce(
             Sum(
@@ -73,7 +81,9 @@ def _annotate_item_progress(qs):
             ),
             _ZERO,
         )
-    ).annotate(remaining_qty=F("quantity") - F("received_qty"))
+    ).annotate(
+        remaining_qty=F("quantity") - F("received_qty") - F("remaining_closed_quantity")
+    )
 
 
 def get_order_items_with_progress(order):

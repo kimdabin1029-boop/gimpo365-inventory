@@ -456,6 +456,14 @@ button.danger:hover { background: #a93226; }
 .inbound-form label.inline-check { flex-direction: row; align-items: center; gap: 6px; }
 .inbound-form input[type="number"] { width: 90px; }
 .help-text { font-size: 0.82rem; margin: 8px 0 0; }
+.badge.closed { background: var(--border-strong); color: var(--text); }
+.order-item-closed { margin: 4px 0 0; font-size: 0.86rem; }
+.order-item-actions { margin: 8px 0 0; }
+
+/* 장바구니 선택 주문 (v0.2.2) */
+.cart-select-label { margin-right: 6px; font-size: 0.85rem; color: var(--muted); }
+.cart-select-all { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; }
+button.action-card { border: 0; cursor: pointer; font: inherit; }
 
 /* ---------- mobile ---------- */
 @media (max-width: 760px) {

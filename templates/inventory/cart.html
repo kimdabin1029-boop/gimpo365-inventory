@@ -6,9 +6,12 @@
 <p class="muted">주문할 품목을 담아 한 번에 확정합니다. 주문은 현재고를 바꾸지 않습니다. (실제 재고 증가는 입고 등록)</p>
 
 {% if items %}
+  <p class="muted">주문할 항목을 선택해 <strong>선택 항목 주문하기</strong>, 또는 <strong>전체 항목 주문하기</strong>를 누르세요.
+    선택하지 않은 항목은 장바구니에 그대로 남습니다.</p>
   {% for ci in items %}
   <div class="card cart-item {% if not ci.supplier_id %}low{% endif %}">
     <p class="cart-item-head">
+      <label class="cart-select-label"><input type="checkbox" class="cart-select" name="cart_items" value="{{ ci.pk }}" form="order-select-form"> 선택</label>
       <strong>{{ ci.managed_item.item.name }}</strong>
       <span class="muted">／ {{ ci.managed_item.department.name }} ／ {{ ci.managed_item.get_unit_display }}</span>
     </p>
@@ -23,7 +26,7 @@
         </select>
       </label>
       <label>수량
-        <input type="number" name="quantity" value="{{ ci.quantity|qty }}" min="1" step="1" class="cart-qty">
+        <input type="number" name="quantity" value="{{ ci.quantity|plain }}" min="1" step="1" class="cart-qty">
       </label>
       <label>메모
         <input type="text" name="memo" value="{{ ci.memo }}">
@@ -42,9 +45,23 @@
   {% endif %}
 
   <div class="form-actions">
-    <a class="action-card primary" href="{% url 'inventory:order_confirm' %}">주문 확정으로 →</a>
+    <label class="cart-select-all"><input type="checkbox" id="cart-select-all"> 전체선택</label>
+    <button type="submit" form="order-select-form" name="mode" value="selected" class="action-card primary">선택 항목 주문하기</button>
+    <button type="submit" form="order-select-form" name="mode" value="all" class="action-card">전체 항목 주문하기</button>
     <a class="back-link" href="{% url 'inventory:stock_list' %}">재고현황으로</a>
   </div>
+  {# 체크박스/버튼을 담는 GET 폼. 카드 안 체크박스는 form 속성으로 이 폼에 연결된다. #}
+  <form id="order-select-form" method="get" action="{% url 'inventory:order_confirm' %}"></form>
+  <script>
+  (function () {
+    var all = document.getElementById("cart-select-all");
+    if (!all) return;
+    var boxes = document.querySelectorAll("input.cart-select");
+    all.addEventListener("change", function () {
+      Array.prototype.forEach.call(boxes, function (b) { b.checked = all.checked; });
+    });
+  })();
+  </script>
 {% else %}
   <p class="muted">장바구니가 비어 있습니다. 재고현황 또는 최소재고 이하 품목에서 담을 수 있습니다.</p>
   <p><a href="{% url 'inventory:stock_list' %}">재고현황으로 이동 →</a></p>

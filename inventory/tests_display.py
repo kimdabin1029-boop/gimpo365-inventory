@@ -5,7 +5,7 @@ from django.urls import reverse
 
 from core.factories import BaseFixtureTestCase, create_item, create_managed_item
 from inventory.models import ItemCategory
-from inventory.templatetags.inventory_extras import qty
+from inventory.templatetags.inventory_extras import money, plain, qty
 
 
 class QtyFilterTest(SimpleTestCase):
@@ -20,6 +20,24 @@ class QtyFilterTest(SimpleTestCase):
     def test_passthrough_for_blank(self):
         self.assertIsNone(qty(None))
         self.assertEqual(qty(""), "")
+
+    def test_thousands_comma(self):
+        self.assertEqual(qty(Decimal("1000.000")), "1,000")
+        self.assertEqual(qty(Decimal("12000")), "12,000")
+        self.assertEqual(qty(Decimal("1234567")), "1,234,567")
+        self.assertEqual(qty(Decimal("1000.5")), "1,000.5")
+        self.assertEqual(qty(Decimal("1000.125")), "1,000.125")
+        self.assertEqual(qty(Decimal("-12000")), "-12,000")
+
+    def test_money_filter(self):
+        self.assertEqual(money(Decimal("12000")), "12,000")
+        self.assertEqual(money(Decimal("1500.50")), "1,500.5")
+
+    def test_plain_has_no_comma(self):
+        # input value/max 용: 콤마 없이 뒤쪽 0 만 제거
+        self.assertEqual(plain(Decimal("1000.000")), "1000")
+        self.assertEqual(plain(Decimal("1000.5")), "1000.5")
+        self.assertEqual(plain(Decimal("2.000")), "2")
 
 
 class TransactionListCommentTest(BaseFixtureTestCase):

@@ -451,8 +451,24 @@ class Order(models.Model):
         return f"{self.internal_order_no} [{self.status}] {self.supplier}"
 
 
+class RemainingCloseReason(models.TextChoices):
+    """미입고 잔여마감 사유. (v0.2.2)"""
+
+    SOLD_OUT = "SOLD_OUT", "품절"
+    REFUND = "REFUND", "환불"
+    REORDER_OTHER = "REORDER_OTHER", "타업체 재주문"
+    ORDER_CANCELED = "ORDER_CANCELED", "주문 취소"
+    GIVE_UP = "GIVE_UP", "입고 포기"
+    OTHER = "OTHER", "기타"
+
+
 class OrderItem(models.Model):
-    """주문 품목. 주문 안의 개별 관리품목. (v0.2.0)"""
+    """주문 품목. 주문 안의 개별 관리품목. (v0.2.0)
+
+    잔여마감(v0.2.2): 남은 미입고 수량을 입고 없이 마감 처리한 수량/사유를 기록한다.
+    잔여마감은 재고 증감이 아니며 StockTransaction 을 만들지 않는다.
+    미처리잔여 = quantity - 기입고(APPROVED 입고 합계) - remaining_closed_quantity.
+    """
 
     order = models.ForeignKey(
         "inventory.Order", on_delete=models.CASCADE, related_name="items"
@@ -462,6 +478,22 @@ class OrderItem(models.Model):
     )
     quantity = models.DecimalField(max_digits=12, decimal_places=3, default=1)
     memo = models.TextField(blank=True, default="")
+    # 잔여마감 (v0.2.2) — 단순 필드 방식. 재고와 무관.
+    remaining_closed_quantity = models.DecimalField(
+        max_digits=12, decimal_places=3, default=0
+    )
+    remaining_closed_reason = models.CharField(
+        max_length=20, choices=RemainingCloseReason.choices, blank=True, default=""
+    )
+    remaining_closed_memo = models.TextField(blank=True, default="")
+    remaining_closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="closed_order_items",
+    )
+    remaining_closed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

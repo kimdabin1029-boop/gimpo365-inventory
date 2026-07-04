@@ -1156,3 +1156,12 @@ StockTransaction Admin에서 add/delete를 허용하지 마라.
 - 조회 로직은 `inventory/detail_selectors.py` 로 분리. 권한은 view/selector 에서 검증(STAFF/TL 본인 범위, MANAGER/ADMIN 전체). 범위 밖은 404.
 - 읽기 전용: 모델/마이그레이션 변경 없음, 현재고 계산·입출고·주문 흐름 불변.
 - 테스트: 신규 tests_v022 추가, 전체 통과.
+
+---
+
+## v0.2.2 후속 hotfix 요약 (장바구니 선택주문 · 숫자 콤마 · 잔여마감)
+
+- 장바구니 선택 주문: `confirm_order(cart_item_ids=...)` 추가. 선택 항목만 공급업체별 주문 생성/제거, 미선택 유지. 전체 주문도 유지. 본인 장바구니 범위 불변.
+- 숫자 콤마: `qty`/`money` 필터 천 단위 콤마 + 뒤 0 제거. 입력칸은 콤마 없는 `plain` 필터 사용.
+- 미입고 잔여마감: `OrderItem.remaining_closed_*` 필드(migration 0005) + `close_remaining` service. 재고 무변경(StockTransaction 미생성). 미처리잔여=주문수량-기입고-잔여마감. 입고대기는 미처리잔여>0만. OrderStatus 값 추가 없음(완료계열은 RECEIVED로 표시).
+- 회귀: 일반 입고/출고/주문서 입고/초과입고 차단/현재고 계산 원칙 유지. 전체 375건 통과.
