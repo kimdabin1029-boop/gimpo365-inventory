@@ -300,7 +300,7 @@ def _add_years(d, years):
 
 
 def _validate_unit_price_required(value) -> Decimal:
-    """입고 단가: 필수 + 0 초과. (v0.2.1)"""
+    """입고 단가: 필수 + 0 초과 + 원 단위 정수. (v0.2.1)"""
     if value is None or value == "":
         raise OrderError("입고 단가는 필수입니다.")
     try:
@@ -309,6 +309,8 @@ def _validate_unit_price_required(value) -> Decimal:
         raise OrderError("단가가 올바른 숫자가 아닙니다.")
     if price <= 0:
         raise OrderError("입고 단가는 0보다 커야 합니다.")
+    if price != price.to_integral_value():
+        raise OrderError("입고 단가는 소수점 없이 원 단위 정수로 입력해주세요.")
     return price
 
 

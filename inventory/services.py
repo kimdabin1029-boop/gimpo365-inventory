@@ -53,7 +53,7 @@ def _to_decimal(value) -> Decimal:
     except (InvalidOperation, TypeError, ValueError):
         raise InvalidQuantityError("수량이 올바른 숫자가 아닙니다.")
     
-    
+
 def _ensure_whole_number(qty: Decimal) -> Decimal:
     """재고 수량은 실무 기준 정수만 허용한다."""
     if qty != qty.to_integral_value():
@@ -128,6 +128,20 @@ def _lock_transaction(transaction_obj) -> StockTransaction:
     """StockTransaction row lock + 최신 상태 재확인. 승인/반려/철회/취소에서 사용."""
     return StockTransaction.objects.select_for_update().get(pk=transaction_obj.pk)
 
+def _validate_whole_won_price(value):
+    """입고 단가는 원 단위 정수만 허용한다. None은 허용한다."""
+    if value is None or value == "":
+        return None
+    try:
+        price = value if isinstance(value, Decimal) else Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise InvalidQuantityError("단가가 올바른 숫자가 아닙니다.")
+    if price <= 0:
+        raise InvalidQuantityError("단가는 0보다 커야 합니다.")
+    if price != price.to_integral_value():
+        raise InvalidQuantityError("단가는 소수점 없이 원 단위 정수로 입력해주세요.")
+    return price
+
 
 # ---------------------------------------------------------------------------
 # 입고 / 출고 service (TASK 09)
@@ -148,13 +162,14 @@ def create_stock_in(
     """입고 등록. STAFF 이상, 즉시 APPROVED, quantity_delta=+quantity. (TECH_SPEC §11)
 
     supplier 기본값은 ManagedItem.default_supplier.
-    unit_price 의 STAFF 제한은 Form 에서 처리한다 (service 는 받은 값을 그대로 저장).
+    unit_price 는 원 단위 정수만 허용한다.
     source_order_item: 주문서 기반 입고일 때 연결할 OrderItem (일반 입고는 None). (v0.2.1)
     """
     _check_access(user, managed_item)
     _ensure_active_managed_item(managed_item)
     _ensure_initial_count_established(managed_item)
     qty = _validate_positive_quantity(quantity)
+    price = _validate_whole_won_price(unit_price)
     occurred = _validate_occurred_at(occurred_at)
 
     if supplier is None:
@@ -169,12 +184,11 @@ def create_stock_in(
         occurred_at=occurred,
         created_by=user,
         supplier=supplier,
-        unit_price=unit_price,
+        unit_price=price,
         expiration_date=expiration_date,
         memo=memo,
         source_order_item=source_order_item,
     )
-
 
 @transaction.atomic
 def create_stock_out(

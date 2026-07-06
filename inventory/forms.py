@@ -223,6 +223,25 @@ def _ensure_whole_quantity(value, label="수량"):
         raise forms.ValidationError(f"{label}은 정수로 입력해주세요.")
     return value
 
+def _won_price_widget():
+    """원화 단가 입력 위젯. +/- 스피너 없이 숫자 직접 입력."""
+    return forms.TextInput(
+        attrs={
+            "inputmode": "numeric",
+            "pattern": "[0-9]*",
+            "placeholder": "예: 35000",
+        }
+    )
+
+
+def _ensure_whole_won(value, label="단가"):
+    """단가는 원 단위 정수만 허용한다."""
+    if value is None:
+        return value
+    if value != value.to_integral_value():
+        raise forms.ValidationError(f"{label}는 소수점 없이 원 단위 정수로 입력해주세요.")
+    return value
+
 
 # ---------------------------------------------------------------------------
 # 생성 Form (user-aware)
@@ -244,8 +263,12 @@ class StockInForm(forms.Form):
     )
     # 입고 데이터 품질 강화(v0.2.1): 단가 필수(0 초과)
     unit_price = forms.DecimalField(
-        label="입고단가", max_digits=12, decimal_places=2,
-        required=True, min_value=Decimal("0.01"),
+        label="입고단가",
+        max_digits=12,
+        decimal_places=2,
+        required=True,
+        min_value=Decimal("1"),
+        widget=_won_price_widget(),
     )
     # 유통기한 필수. '유통기한 없음' 선택 시 입고일+3년 자동 계산.
     expiration_date = forms.DateField(
@@ -280,6 +303,12 @@ class StockInForm(forms.Form):
         if value is None or value <= 0:
             raise forms.ValidationError("입고수량은 0보다 커야 합니다.")
         return _ensure_whole_quantity(value, "수량")
+    
+    def clean_unit_price(self):
+        value = self.cleaned_data.get("unit_price")
+        if value is None or value <= 0:
+            raise forms.ValidationError("입고단가는 0보다 커야 합니다.")
+        return _ensure_whole_won(value, "입고단가")
 
     def clean_occurred_at(self):
         return _clean_trade_date(self.cleaned_data.get("occurred_at"), "입고일자")

@@ -83,7 +83,7 @@
       <input type="date" name="occurred_at" value="{{ today|date:'Y-m-d' }}" required>
     </label>
     <label>단가
-      <input type="number" name="unit_price" min="0.01" step="0.01" placeholder="필수" required>
+      <input type="text" name="unit_price" inputmode="numeric" pattern="[0-9]*" placeholder="예: 35000" required>
     </label>
     <label>유통기한
       <input type="date" name="expiration_date">
