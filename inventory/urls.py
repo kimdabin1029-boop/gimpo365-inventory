@@ -21,6 +21,8 @@ from inventory.views import (
     InventoryDashboardView,
     LowStockListView,
     ManagedItemDetailView,
+    MasterDataCheckExportView,
+    MasterDataCheckView,
     MonthlyReportExportView,
     MonthlyReportView,
     OrderCancelView,
@@ -122,4 +124,7 @@ urlpatterns = [
     path("export/stock/", StockExportView.as_view(), name="stock_export"),
     path("export/transactions/", TransactionExportView.as_view(), name="transaction_export"),
     path("export/inbound-pending/", InboundPendingExportView.as_view(), name="inbound_pending_export"),
+    # 관리자 기준정보 점검 (v0.2.5, MANAGER 이상)
+    path("admin/master-data-check/", MasterDataCheckView.as_view(), name="master_data_check"),
+    path("admin/master-data-check/export/", MasterDataCheckExportView.as_view(), name="master_data_check_export"),
 ]

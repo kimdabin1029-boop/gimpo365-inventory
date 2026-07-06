@@ -35,23 +35,43 @@ def _norm(value):
     return value
 
 
+def _fill_sheet(ws, headers, rows):
+    ws.append(list(headers))
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    for row in rows:
+        ws.append([_norm(c) for c in row])
+
+
+def _download_response(wb, filename):
+    response = HttpResponse(content_type=XLSX_CONTENT_TYPE)
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
 def xlsx_response(*, filename, sheet_title, headers, rows):
-    """헤더 + 행들로 xlsx 를 만들어 다운로드 응답을 돌려준다.
+    """헤더 + 행들로 단일 시트 xlsx 를 만들어 다운로드 응답을 돌려준다.
 
     rows: 반복 가능한 '행'들. 각 행은 셀 값 리스트. (Decimal 은 숫자로 저장)
     """
     wb = Workbook()
     ws = wb.active
     ws.title = (sheet_title or "Sheet1")[:31]
+    _fill_sheet(ws, headers, rows)
+    return _download_response(wb, filename)
 
-    ws.append(list(headers))
-    for cell in ws[1]:
-        cell.font = Font(bold=True)
 
-    for row in rows:
-        ws.append([_norm(c) for c in row])
+def xlsx_multi_sheet_response(*, filename, sheets):
+    """여러 시트를 담은 xlsx 다운로드 응답. (v0.2.5)
 
-    response = HttpResponse(content_type=XLSX_CONTENT_TYPE)
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    wb.save(response)
-    return response
+    sheets: [(sheet_title, headers, rows), ...]
+    """
+    wb = Workbook()
+    wb.remove(wb.active)  # 기본 시트 제거 후 지정 시트만 추가
+    for title, headers, rows in sheets:
+        ws = wb.create_sheet(title=(title or "Sheet")[:31])
+        _fill_sheet(ws, headers, rows)
+    if not wb.worksheets:  # 안전장치: 최소 1개 시트
+        wb.create_sheet(title="Sheet1")
+    return _download_response(wb, filename)

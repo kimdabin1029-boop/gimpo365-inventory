@@ -93,6 +93,13 @@
           <a class="sidebar-link" href="{% url 'inventory:monthly_report' %}">리포트</a>
         {% endif %}
       </li>
+      <li>
+        {% if cur == 'master_data_check' %}
+          <a class="sidebar-link active" aria-current="page" href="{% url 'inventory:master_data_check' %}">기준정보 점검</a>
+        {% else %}
+          <a class="sidebar-link" href="{% url 'inventory:master_data_check' %}">기준정보 점검</a>
+        {% endif %}
+      </li>
       {% endif %}
     </ul>
   </nav>

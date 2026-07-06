@@ -15,7 +15,17 @@ from django.views.generic import ListView, TemplateView
 from accounts.models import Role
 from accounts.permissions import has_role_at_least, is_manager_or_above
 from inventory.exceptions import InventoryError
-from inventory.exports import dated_filename, xlsx_response
+from inventory.exports import (
+    dated_filename,
+    xlsx_multi_sheet_response,
+    xlsx_response,
+)
+from inventory.master_data_checks import (
+    item_rows,
+    managed_item_rows,
+    run_master_data_checks,
+    supplier_rows,
+)
 from inventory.report_selectors import (
     get_export_transactions,
     get_monthly_summary,
@@ -1266,4 +1276,67 @@ class MonthlyReportExportView(ManagerRequiredMixin, _MonthlyReportMixin, View):
             sheet_title="월간 입출고 요약",
             headers=headers,
             rows=out_rows,
+        )
+
+
+# ---------------------------------------------------------------------------
+# 관리자 기준정보 점검 / 기준정보 엑셀 (v0.2.5) — MANAGER 이상, 읽기·출력 전용
+# ---------------------------------------------------------------------------
+class MasterDataCheckView(ManagerRequiredMixin, View):
+    """기준정보 점검 화면. command/엑셀과 동일한 master_data_checks 로직 재사용. (v0.2.5)"""
+
+    template_name = "inventory/master_data_check.html"
+
+    def get(self, request, *args, **kwargs):
+        result = run_master_data_checks()
+        return render(request, self.template_name, {"result": result})
+
+
+class MasterDataCheckExportView(ManagerRequiredMixin, View):
+    """기준정보 엑셀 다운로드 (관리품목/품목/공급업체/점검결과 시트). (v0.2.5)"""
+
+    def get(self, request, *args, **kwargs):
+        result = run_master_data_checks()
+
+        mi_headers = [
+            "부서", "품목명", "규격", "단위", "관리품목 활성 여부", "현재고",
+            "최소재고", "기본 공급업체", "보관위치", "최초재고 입력 여부", "점검 상태", "비고",
+        ]
+        mi_rows = [
+            [
+                r["department"], r["item_name"], r["specification"], r["unit"],
+                r["is_active"], r["current_stock"], r["minimum_stock"],
+                r["default_supplier"], r["storage_location"], r["has_initial"],
+                r["status"], "",
+            ]
+            for r in managed_item_rows(result)
+        ]
+
+        item_headers = ["품목명", "규격", "분류", "활성 여부", "연결된 관리품목 수", "비고"]
+        item_data = [
+            [r["name"], r["specification"], r["category"], r["is_active"], r["managed_count"], ""]
+            for r in item_rows()
+        ]
+
+        sup_headers = ["공급업체명", "활성 여부", "연락처", "메모", "기본공급 관리품목 수", "비고"]
+        sup_data = [
+            [r["name"], r["is_active"], r["phone"], r["memo"], r["default_count"], ""]
+            for r in supplier_rows()
+        ]
+
+        check_headers = ["점검구분", "심각도", "부서", "품목명", "내용", "권장조치", "관리품목 ID"]
+        check_data = [
+            [f["section"], f["severity"], f["dept"], f["item_name"],
+             f["message"], f["recommend"], f["mi_id"]]
+            for f in result["findings"]
+        ]
+
+        return xlsx_multi_sheet_response(
+            filename=dated_filename("inventory_master_data_check"),
+            sheets=[
+                ("관리품목", mi_headers, mi_rows),
+                ("품목", item_headers, item_data),
+                ("공급업체", sup_headers, sup_data),
+                ("점검결과", check_headers, check_data),
+            ],
         )

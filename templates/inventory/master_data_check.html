@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load inventory_extras %}
+{% block title %}기준정보 점검 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>기준정보 점검</h1>
+<p class="muted">
+  이 화면은 정식 운영 전 기준정보 누락 여부를 점검하기 위한 관리자용 화면입니다.
+  현재고는 거래기록 기준으로 계산되므로, 운영기록 초기화 후에는 최초재고 미입력 항목이 정상적으로 표시될 수 있습니다.
+</p>
+
+<section class="summary-grid">
+  <div class="summary-item"><div class="num">{{ result.active_count }}</div><div class="label">전체 활성 관리품목</div></div>
+  <div class="summary-item"><div class="num">{{ result.warning_count }}</div><div class="label">경고 항목</div></div>
+  <div class="summary-item"><div class="num">{{ result.no_initial_count }}</div><div class="label">최초재고 미입력</div></div>
+  <div class="summary-item"><div class="num">{{ result.normal_count }}</div><div class="label">기준정보 정상</div></div>
+</section>
+
+<p><a class="action-card primary" href="{% url 'inventory:master_data_check_export' %}">기준정보 엑셀 다운로드</a></p>
+
+{% for s in result.sections %}
+<section class="lowstock-panel">
+  <h2>{{ s.title }}
+    <span class="badge {% if s.severity == '경고' %}low{% else %}closed{% endif %}">{{ s.severity }} {{ s.count }}건</span>
+  </h2>
+  {% if s.items %}
+  <div class="lowstock-scroll">
+  <table class="data">
+    {% if s.kind == 'mi' %}
+    <thead>
+      <tr><th class="col-dept">부서</th><th class="col-name">품목명</th><th>규격/단위</th>
+        <th>기본 공급업체</th><th class="num">최소재고</th><th>보관위치</th><th>상태</th><th>상세</th></tr>
+    </thead>
+    <tbody>
+      {% for mi in s.items %}
+      <tr>
+        <td class="col-dept">{{ mi.department.name }}</td>
+        <td class="col-name">{{ mi.item.name }}</td>
+        <td>{{ mi.item.specification|default:"-" }} / {{ mi.get_unit_display }}</td>
+        <td>{{ mi.default_supplier.name|default:"-" }}</td>
+        <td class="num">{{ mi.minimum_stock|qty }}</td>
+        <td>{{ mi.storage_location|default:"-" }}</td>
+        <td>{% if mi.is_active %}활성{% else %}사용중지{% endif %}</td>
+        <td><a href="{% url 'inventory:managed_item_detail' mi.pk %}">상세</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% else %}
+    <thead><tr><th class="col-name">품목명</th><th>규격</th><th>활성 여부</th></tr></thead>
+    <tbody>
+      {% for it in s.items %}
+      <tr>
+        <td class="col-name">{{ it.name }}</td>
+        <td>{{ it.specification|default:"-" }}</td>
+        <td>{% if it.is_active %}활성{% else %}사용중지{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% endif %}
+  </table>
+  </div>
+  {% else %}
+  <p class="muted">해당 항목이 없습니다.</p>
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

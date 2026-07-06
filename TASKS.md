@@ -1178,3 +1178,13 @@ StockTransaction Admin에서 add/delete를 허용하지 마라.
 - 월간 요약: APPROVED 거래만 집계. 입고/출고/순증감/입고금액(Σ 수량×단가, 단가없으면 0)/최근입·출고일.
 - 신규 모듈: inventory/exports.py, inventory/report_selectors.py. 모델/마이그레이션/기존 service 변경 없음.
 - 회귀: 입고/출고/주문서 입고/부분입고/잔여마감/현재고 계산 원칙 유지. 전체 테스트 통과.
+
+---
+
+## v0.2.5 요약 (운영 시작 전 초기화 · 기준정보 점검)
+
+- reset_operational_data command(터미널): 기본 dry-run, --yes 시 StockTransaction/CartItem/OrderItem/Order 삭제(FK 안전순서, atomic), User/Dept/Supplier/Item/ManagedItem 유지. DEBUG=False 는 --allow-production 필요.
+- check_inventory_master_data command + 관리자 웹 화면(MANAGER+) + 기준정보 엑셀(4시트): 공통 로직 inventory/master_data_checks.py 재사용.
+- 점검항목 8종(기본공급업체/최소재고/보관위치/규격/비활성공급연결/비활성품목/활성품목無관리품목/최초재고). 최초재고 기준=승인 INITIAL_COUNT.
+- 읽기 전용(엑셀/화면). 현재고 저장필드 없음, 기존 입고/출고/주문/리포트/현재고 계산 원칙 불변. 모델/마이그레이션 변경 없음.
+- STAFF/TL 관리자 메뉴 미노출. 전체 테스트 통과.

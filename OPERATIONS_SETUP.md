@@ -726,3 +726,38 @@ MANAGER/ADMIN 은 전 부서 관리품목이 한 목록에 나와 선택이 번�
 - 엑셀은 서버에 저장하지 않고 즉시 다운로드된다. 숫자 셀은 숫자로 저장되어 합계 계산이 가능하다.
   파일명 예: inventory_stock_snapshot_YYYYMMDD.xlsx, inventory_monthly_report_YYYYMMDD.xlsx
 ```
+
+## 6I. 운영 시작 전 초기화 · 기준정보 점검 (v0.2.5)
+
+### 6I.1 reset_operational_data (터미널 전용)
+직원교육/알파테스트 후 **정식 운영 시작 전**, 기준정보는 유지하고 운영기록만 지운다.
+
+```text
+python manage.py reset_operational_data            # 기본 dry-run (삭제 예정 건수만 출력)
+python manage.py reset_operational_data --yes      # 실제 삭제
+python manage.py reset_operational_data --yes --allow-production   # DEBUG=False 운영환경에서 강제
+```
+```text
+- 삭제: StockTransaction / CartItem / OrderItem / Order (운영기록)
+- 유지: User / Department / Supplier / Item / ManagedItem / OrderCart(껍데기) 등 기준정보
+- 안전장치: 기본 dry-run, --yes 에서만 삭제, transaction.atomic,
+  DEBUG=False 에서는 --allow-production 없이는 차단.
+- 주의: StockTransaction 을 지우면 현재고 기준(APPROVED 합계)도 사라진다.
+  초기화 후 각 관리품목별 최초재고 입력/승인을 다시 진행해야 한다.
+```
+
+### 6I.2 check_inventory_master_data (터미널 전용) / 관리자 > 기준정보 점검 화면
+정식 운영 전 기준정보 누락·오류를 점검한다. **command / 웹 화면 / 엑셀이 동일 기준**으로 결과를 낸다.
+
+```text
+python manage.py check_inventory_master_data       # 요약 출력(읽기 전용)
+```
+```text
+- 좌측 퀵메뉴 '관리자 > 기준정보 점검'(MANAGER 이상). STAFF/TEAM_LEADER 미노출.
+- 점검: 기본 공급업체 없음 / 최소재고 0 이하 / 보관위치 없음 / 규격 미표시 /
+  비활성 공급업체 연결 / 비활성 품목의 관리품목 / 활성 품목인데 활성 관리품목 없음 /
+  최초재고(승인 INITIAL_COUNT) 미입력.
+- 운영기록 초기화 직후에는 모든 관리품목이 '최초재고 미입력'으로 표시되는 것이 정상이다.
+- [기준정보 엑셀 다운로드]: 관리품목/품목/공급업체/점검결과 4개 시트.
+  현재고는 저장 필드 없이 APPROVED 합계로 계산되어 표시된다.
+```
