@@ -84,6 +84,16 @@
           <a class="sidebar-link" href="{% url 'inventory:inbound_pending' %}">입고대기 품목</a>
         {% endif %}
       </li>
+      {% if nav_is_manager %}
+      <li class="sidebar-sep"><span>관리자</span></li>
+      <li>
+        {% if cur == 'monthly_report' %}
+          <a class="sidebar-link active" aria-current="page" href="{% url 'inventory:monthly_report' %}">리포트</a>
+        {% else %}
+          <a class="sidebar-link" href="{% url 'inventory:monthly_report' %}">리포트</a>
+        {% endif %}
+      </li>
+      {% endif %}
     </ul>
   </nav>
 </aside>

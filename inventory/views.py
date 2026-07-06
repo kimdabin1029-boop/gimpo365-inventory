@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -14,6 +15,12 @@ from django.views.generic import ListView, TemplateView
 from accounts.models import Role
 from accounts.permissions import has_role_at_least, is_manager_or_above
 from inventory.exceptions import InventoryError
+from inventory.exports import dated_filename, xlsx_response
+from inventory.report_selectors import (
+    get_export_transactions,
+    get_monthly_summary,
+    resolve_tx_date_range,
+)
 from inventory.models import StockTransaction, Supplier, TransactionType
 from inventory.forms import (
     AddToCartForm,
@@ -24,6 +31,7 @@ from inventory.forms import (
     CartItemForm,
     ConfirmOrderForm,
     InboundPendingFilterForm,
+    MonthlyReportForm,
     OrderFilterForm,
     OrderItemStockInForm,
     PendingTransactionFilterForm,
@@ -1056,3 +1064,206 @@ class OrderCancelView(LoginRequiredMixin, View):
 # OrderReceiveView(주문 단위 입고완료 버튼)는 v0.2.1 에서 제거되었다.
 # 입고등록은 OrderItem 단위(OrderItemStockInView)로만 하며, Order 상태는
 # OrderItem 들의 입고 상태를 보고 recompute_order_status 로 자동 갱신된다.
+
+
+# ---------------------------------------------------------------------------
+# 관리자 리포트 / 엑셀 내보내기 (v0.2.4) — MANAGER 이상, 읽기/출력 전용
+# ---------------------------------------------------------------------------
+class StockExportView(ManagerRequiredMixin, _StockFilterMixin, View):
+    """재고현황 엑셀 다운로드. 재고현황 화면과 동일 selector/권한/필터. (v0.2.4)"""
+
+    def get(self, request, *args, **kwargs):
+        form = self.get_filter_form()
+        filters = self.build_filters(form)
+        if request.GET.get("filter") == "low_stock" or request.GET.get("low_stock"):
+            filters["low_stock"] = True
+        items = get_managed_items_with_current_stock(request.user, filters)
+        headers = [
+            "부서", "품목명", "규격", "현재고", "최소재고", "단위",
+            "기본 공급업체", "보관위치", "활성 여부",
+        ]
+        rows = (
+            [
+                mi.department.name,
+                mi.item.name,
+                mi.item.specification or "",
+                mi.current_stock,
+                mi.minimum_stock,
+                mi.get_unit_display(),
+                mi.default_supplier.name if mi.default_supplier_id else "",
+                mi.storage_location or "",
+                "활성" if mi.is_active else "사용중지",
+            ]
+            for mi in items
+        )
+        return xlsx_response(
+            filename=dated_filename("inventory_stock_snapshot"),
+            sheet_title="재고현황",
+            headers=headers,
+            rows=rows,
+        )
+
+
+class TransactionExportView(ManagerRequiredMixin, View):
+    """거래이력 엑셀 다운로드. 화면 필터/기간 그대로, 페이지네이션 무관 전체. (v0.2.4)"""
+
+    def get(self, request, *args, **kwargs):
+        form = TransactionFilterForm(request.GET or None, user=request.user)
+        filters = {}
+        if form.is_valid():
+            cd = form.cleaned_data
+            for key in ("department", "transaction_type", "status"):
+                if cd.get(key):
+                    filters[key] = cd[key]
+        date_from, date_to = resolve_tx_date_range(request.GET)
+        qs = get_export_transactions(request.user, filters, date_from, date_to)
+        headers = [
+            "거래일자", "거래유형", "상태", "부서", "품목명", "수량", "단가",
+            "유통기한", "공급업체", "입력자", "승인자", "메모", "주문연계",
+        ]
+        rows = (
+            [
+                timezone.localdate(t.occurred_at),
+                t.get_transaction_type_display(),
+                t.get_status_display(),
+                t.managed_item.department.name,
+                t.managed_item.item.name,
+                t.quantity_delta,
+                t.unit_price if t.unit_price is not None else "",
+                t.expiration_date if t.expiration_date else "",
+                t.supplier.name if t.supplier_id else "",
+                t.created_by.display_name,
+                t.approved_by.display_name if t.approved_by_id else "",
+                t.memo or "",
+                "주문연계" if t.source_order_item_id else "",
+            ]
+            for t in qs
+        )
+        return xlsx_response(
+            filename=dated_filename("inventory_transactions"),
+            sheet_title="거래이력",
+            headers=headers,
+            rows=rows,
+        )
+
+
+class InboundPendingExportView(ManagerRequiredMixin, View):
+    """입고대기 품목 엑셀 다운로드. 미처리잔여 > 0 인 OrderItem 만. (v0.2.4)"""
+
+    def get(self, request, *args, **kwargs):
+        form = InboundPendingFilterForm(request.GET or None, user=request.user)
+        filters = {}
+        if form.is_valid():
+            cd = form.cleaned_data
+            for key in ("supplier", "department", "order_date", "overdue"):
+                if cd.get(key):
+                    filters[key] = cd[key]
+        items = get_pending_order_items(request.user, filters)
+        headers = [
+            "주문번호", "주문일자", "공급업체", "부서", "품목명",
+            "주문수량", "기입고수량", "잔여수량", "잔여마감수량", "상태", "주문자",
+        ]
+        rows = (
+            [
+                oi.order.internal_order_no,
+                oi.order.order_date,
+                oi.order.supplier.name,
+                oi.managed_item.department.name,
+                oi.managed_item.item.name,
+                oi.quantity,
+                oi.received_qty,
+                oi.remaining_qty,
+                oi.remaining_closed_quantity,
+                oi.order.get_status_display(),
+                oi.order.ordered_by.display_name,
+            ]
+            for oi in items
+        )
+        return xlsx_response(
+            filename=dated_filename("inventory_inbound_pending"),
+            sheet_title="입고대기 품목",
+            headers=headers,
+            rows=rows,
+        )
+
+
+class _MonthlyReportMixin:
+    """월간 입출고 요약: 폼/기간/요약행 구성 공통 로직."""
+
+    def _build(self, request):
+        form = MonthlyReportForm(request.GET or None)
+        today = timezone.localdate()
+        start = end = None
+        filters = {}
+        if form.is_valid():
+            cd = form.cleaned_data
+            start = cd.get("start_date")
+            end = cd.get("end_date")
+            if cd.get("department"):
+                filters["department"] = cd["department"]
+            if cd.get("supplier"):
+                filters["supplier"] = cd["supplier"]
+            if cd.get("item_query"):
+                filters["item_query"] = cd["item_query"]
+        if start is None:
+            start = today.replace(day=1)
+        if end is None:
+            end = today
+        rows = get_monthly_summary(request.user, start, end, filters)
+        return form, start, end, rows
+
+
+class MonthlyReportView(ManagerRequiredMixin, _MonthlyReportMixin, View):
+    """월간 입출고 요약 리포트 화면. (v0.2.4)"""
+
+    template_name = "inventory/monthly_report.html"
+
+    def get(self, request, *args, **kwargs):
+        form, start, end, rows = self._build(request)
+        totals = {
+            "in_qty": sum((r["in_qty"] for r in rows), Decimal("0")),
+            "out_qty": sum((r["out_qty"] for r in rows), Decimal("0")),
+            "net": sum((r["net"] for r in rows), Decimal("0")),
+            "in_amount": sum((r["in_amount"] for r in rows), Decimal("0")),
+        }
+        return render(
+            request,
+            self.template_name,
+            {
+                "form": form,
+                "rows": rows,
+                "totals": totals,
+                "start": start,
+                "end": end,
+            },
+        )
+
+
+class MonthlyReportExportView(ManagerRequiredMixin, _MonthlyReportMixin, View):
+    """월간 입출고 요약 엑셀 다운로드. (v0.2.4)"""
+
+    def get(self, request, *args, **kwargs):
+        _form, start, end, rows = self._build(request)
+        headers = [
+            "부서", "품목명", "입고수량", "출고수량", "순증감",
+            "입고금액", "최근 입고일", "최근 출고일",
+        ]
+        out_rows = (
+            [
+                r["department"],
+                r["item_name"],
+                r["in_qty"],
+                r["out_qty"],
+                r["net"],
+                r["in_amount"],
+                timezone.localdate(r["last_in"]) if r["last_in"] else "",
+                timezone.localdate(r["last_out"]) if r["last_out"] else "",
+            ]
+            for r in rows
+        )
+        return xlsx_response(
+            filename=dated_filename("inventory_monthly_report"),
+            sheet_title="월간 입출고 요약",
+            headers=headers,
+            rows=out_rows,
+        )

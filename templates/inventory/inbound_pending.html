@@ -10,6 +10,10 @@
   <button type="submit">조회</button>
 </form>
 
+{% if nav_is_manager %}
+<p><a class="action-card" href="{% url 'inventory:inbound_pending_export' %}?{{ request.GET.urlencode }}">엑셀 다운로드</a></p>
+{% endif %}
+
 <div class="table-wrap">
 <table class="data">
   <thead>

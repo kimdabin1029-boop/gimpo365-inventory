@@ -655,6 +655,27 @@ class OrderItemStockInForm(forms.Form):
         return cleaned
 
 
+class MonthlyReportForm(forms.Form):
+    """월간 입출고 요약 필터. MANAGER 이상 전용 화면. (v0.2.4)
+
+    기본값(파라미터 없음)은 이번 달 1일 ~ 오늘. 부서/공급업체/품목검색으로 좁힐 수 있다.
+    """
+
+    start_date = forms.DateField(label="시작일", required=False, widget=_date_widget())
+    end_date = forms.DateField(label="종료일", required=False, widget=_date_widget())
+    department = forms.ModelChoiceField(
+        label="부서",
+        queryset=Department.objects.filter(active_for_inventory=True),
+        required=False,
+    )
+    supplier = forms.ModelChoiceField(
+        label="공급업체",
+        queryset=Supplier.objects.filter(is_active=True),
+        required=False,
+    )
+    item_query = forms.CharField(label="품목 검색", required=False)
+
+
 class RemainingCloseForm(forms.Form):
     """미입고 잔여마감 Form. (v0.2.2)
 

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load inventory_extras %}
+{% block title %}월간 입출고 요약 · gimpo365-inventory{% endblock %}
+{% block content %}
+<h1>월간 입출고 요약</h1>
+<p class="muted">APPROVED 거래만 집계합니다. (취소/반려/대기 거래 제외) · 기간 {{ start|date:"Y-m-d" }} ~ {{ end|date:"Y-m-d" }}</p>
+
+<form method="get" class="filter-form">
+  {{ form.as_p }}
+  <button type="submit">조회</button>
+</form>
+
+<p>
+  <a class="action-card primary" href="{% url 'inventory:monthly_report_export' %}?{{ request.GET.urlencode }}">엑셀 다운로드</a>
+</p>
+
+<div class="table-wrap">
+<table class="data">
+  <thead>
+    <tr>
+      <th class="col-dept">부서</th><th class="col-name">품목명</th>
+      <th class="num">입고수량</th><th class="num">출고수량</th><th class="num">순증감</th>
+      <th class="num">입고금액</th><th>최근 입고일</th><th>최근 출고일</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td class="col-dept">{{ r.department }}</td>
+      <td class="col-name">{{ r.item_name }}</td>
+      <td class="num">{{ r.in_qty|qty }}</td>
+      <td class="num">{{ r.out_qty|qty }}</td>
+      <td class="num">{{ r.net|qty }}</td>
+      <td class="num">{{ r.in_amount|money }}</td>
+      <td>{{ r.last_in|date:"Y-m-d"|default:"-" }}</td>
+      <td>{{ r.last_out|date:"Y-m-d"|default:"-" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="8">해당 기간에 집계할 거래가 없습니다.</td></tr>
+    {% endfor %}
+  </tbody>
+  {% if rows %}
+  <tfoot>
+    <tr>
+      <th colspan="2">합계</th>
+      <th class="num">{{ totals.in_qty|qty }}</th>
+      <th class="num">{{ totals.out_qty|qty }}</th>
+      <th class="num">{{ totals.net|qty }}</th>
+      <th class="num">{{ totals.in_amount|money }}</th>
+      <th colspan="2"></th>
+    </tr>
+  </tfoot>
+  {% endif %}
+</table>
+</div>
+{% endblock %}

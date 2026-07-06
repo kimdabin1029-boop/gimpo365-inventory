@@ -1165,3 +1165,16 @@ StockTransaction Admin에서 add/delete를 허용하지 마라.
 - 숫자 콤마: `qty`/`money` 필터 천 단위 콤마 + 뒤 0 제거. 입력칸은 콤마 없는 `plain` 필터 사용.
 - 미입고 잔여마감: `OrderItem.remaining_closed_*` 필드(migration 0005) + `close_remaining` service. 재고 무변경(StockTransaction 미생성). 미처리잔여=주문수량-기입고-잔여마감. 입고대기는 미처리잔여>0만. OrderStatus 값 추가 없음(완료계열은 RECEIVED로 표시).
 - 회귀: 일반 입고/출고/주문서 입고/초과입고 차단/현재고 계산 원칙 유지. 전체 375건 통과.
+
+---
+
+## v0.2.4 요약 (관리자 리포트 · 엑셀 내보내기)
+
+- 읽기/출력 전용. MANAGER 이상만 접근(ManagerRequiredMixin). STAFF/TL 리포트 메뉴·버튼 미노출.
+- 엑셀(openpyxl==3.1.5): 재고현황/거래이력/입고대기 다운로드 + 월간 입출고 요약 화면·다운로드.
+  - 서버 미저장, HttpResponse 즉시 스트리밍. 숫자 셀은 숫자로 저장.
+  - 거래이력 export 는 화면 필터/기간 그대로, 페이지네이션 무관 전체.
+  - 입고대기 export 는 미처리잔여>0(부분입고/잔여마감 반영)만.
+- 월간 요약: APPROVED 거래만 집계. 입고/출고/순증감/입고금액(Σ 수량×단가, 단가없으면 0)/최근입·출고일.
+- 신규 모듈: inventory/exports.py, inventory/report_selectors.py. 모델/마이그레이션/기존 service 변경 없음.
+- 회귀: 입고/출고/주문서 입고/부분입고/잔여마감/현재고 계산 원칙 유지. 전체 테스트 통과.
