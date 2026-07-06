@@ -72,14 +72,11 @@ def add_years_date(d, years):
 
 
 def _qty_widget(*, allow_zero: bool, step: str = "1"):
-    """수량 입력 위젯. 기본 step=1 (실무 정수 단위).
-
-    min_value 를 소수로 둔 필드(예: 주문서 기반 입고수량 min 0.001)에서는 step 도
-    소수로 맞춰야 브라우저의 "가장 근접한 유효 값" 오류가 나지 않는다. (step="0.001")
-    """
-    attrs = {"step": step}
-    if allow_zero:
-        attrs["min"] = "0"
+    """수량 입력 위젯. 실무 기준 정수 단위."""
+    attrs = {
+        "step": step,
+        "min": "0" if allow_zero else "1",
+    }
     return forms.NumberInput(attrs=attrs)
 
 
@@ -218,6 +215,14 @@ def _add_department_filter(form, user):
     # 부서 필터를 관리품목 위에 배치
     form.order_fields(["department", "managed_item"])
 
+def _ensure_whole_quantity(value, label="수량"):
+    """실무에 쓰이지 않는 소수 표현 정리, 정수로 표현"""
+    if value is None:
+        return value
+    if value != value.to_integral_value():
+        raise forms.ValidationError(f"{label}은 정수로 입력해주세요.")
+    return value
+
 
 # ---------------------------------------------------------------------------
 # 생성 Form (user-aware)
@@ -274,7 +279,7 @@ class StockInForm(forms.Form):
         value = self.cleaned_data.get("quantity")
         if value is None or value <= 0:
             raise forms.ValidationError("입고수량은 0보다 커야 합니다.")
-        return value
+        return _ensure_whole_quantity(value, "수량")
 
     def clean_occurred_at(self):
         return _clean_trade_date(self.cleaned_data.get("occurred_at"), "입고일자")
@@ -321,7 +326,7 @@ class StockOutForm(forms.Form):
         value = self.cleaned_data.get("quantity")
         if value is None or value <= 0:
             raise forms.ValidationError("출고수량은 0보다 커야 합니다.")
-        return value
+        return _ensure_whole_quantity(value, "수량")
 
     def clean_occurred_at(self):
         return _clean_trade_date(self.cleaned_data.get("occurred_at"), "출고일자")
@@ -363,7 +368,7 @@ class AdjustmentRequestForm(forms.Form):
         value = self.cleaned_data.get("actual_quantity")
         if value is None or value < 0:
             raise forms.ValidationError("실제 수량은 0 이상이어야 합니다.")
-        return value
+        return _ensure_whole_quantity(value, "수량")
 
     def clean_occurred_at(self):
         return _clean_trade_date(self.cleaned_data.get("occurred_at"), "기준일자")
@@ -408,7 +413,7 @@ class InitialCountForm(forms.Form):
         value = self.cleaned_data.get("quantity")
         if value is None or value < 0:
             raise forms.ValidationError("초기재고 수량은 0 이상이어야 합니다.")
-        return value
+        return _ensure_whole_quantity(value, "수량")
 
     def clean_occurred_at(self):
         return _clean_trade_date(self.cleaned_data.get("occurred_at"), "기준일자")
@@ -559,7 +564,7 @@ class AddToCartForm(forms.Form):
         value = self.cleaned_data.get("quantity")
         if value is None or value <= 0:
             raise forms.ValidationError("주문수량은 0보다 커야 합니다.")
-        return value
+        return _ensure_whole_quantity(value, "수량")
 
 
 class CartItemForm(forms.Form):
@@ -582,7 +587,7 @@ class CartItemForm(forms.Form):
         value = self.cleaned_data.get("quantity")
         if value is None or value <= 0:
             raise forms.ValidationError("수량은 0보다 커야 합니다.")
-        return value
+        return _ensure_whole_quantity(value, "수량")
 
 
 class ConfirmOrderForm(forms.Form):
@@ -615,7 +620,7 @@ class OrderItemStockInForm(forms.Form):
 
     quantity_input = forms.DecimalField(
         label="입고수량", max_digits=12, decimal_places=3,
-        min_value=Decimal("0.001"), widget=_qty_widget(allow_zero=False, step="0.001"),
+        min_value=Decimal("1"), widget=_qty_widget(allow_zero=False),
     )
     occurred_at = _trade_date_field("입고일자")
     unit_price = forms.DecimalField(
@@ -636,7 +641,7 @@ class OrderItemStockInForm(forms.Form):
         value = self.cleaned_data.get("quantity_input")
         if value is None or value <= 0:
             raise forms.ValidationError("입고수량은 0보다 커야 합니다.")
-        return value
+        return _ensure_whole_quantity(value, "입고수량")
 
     def clean_occurred_at(self):
         return _clean_trade_date(self.cleaned_data.get("occurred_at"), "입고일자")
@@ -685,7 +690,7 @@ class RemainingCloseForm(forms.Form):
 
     quantity = forms.DecimalField(
         label="마감수량", max_digits=12, decimal_places=3,
-        min_value=Decimal("0.001"), widget=_qty_widget(allow_zero=False, step="0.001"),
+        min_value=Decimal("1"), widget=_qty_widget(allow_zero=False),
     )
     reason = forms.ChoiceField(label="마감사유", choices=RemainingCloseReason.choices)
     memo = forms.CharField(
@@ -696,7 +701,7 @@ class RemainingCloseForm(forms.Form):
         value = self.cleaned_data.get("quantity")
         if value is None or value <= 0:
             raise forms.ValidationError("마감수량은 0보다 커야 합니다.")
-        return value
+        return _ensure_whole_quantity(value, "마감수량")
 
 
 class OrderFilterForm(forms.Form):

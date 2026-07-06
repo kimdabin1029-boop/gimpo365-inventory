@@ -52,6 +52,13 @@ def _to_decimal(value) -> Decimal:
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
         raise InvalidQuantityError("수량이 올바른 숫자가 아닙니다.")
+    
+    
+def _ensure_whole_number(qty: Decimal) -> Decimal:
+    """재고 수량은 실무 기준 정수만 허용한다."""
+    if qty != qty.to_integral_value():
+        raise InvalidQuantityError("수량은 소수점 없이 정수로 입력해주세요.")
+    return qty
 
 
 def _validate_positive_quantity(value) -> Decimal:
@@ -59,7 +66,7 @@ def _validate_positive_quantity(value) -> Decimal:
     qty = _to_decimal(value)
     if qty <= 0:
         raise InvalidQuantityError("수량은 0보다 커야 합니다.")
-    return qty
+    return _ensure_whole_number(qty)
 
 
 def _validate_non_negative_quantity(value) -> Decimal:
@@ -67,7 +74,7 @@ def _validate_non_negative_quantity(value) -> Decimal:
     qty = _to_decimal(value)
     if qty < 0:
         raise InvalidQuantityError("수량은 0 이상이어야 합니다.")
-    return qty
+    return _ensure_whole_number(qty)
 
 
 def _validate_occurred_at(occurred_at):

@@ -38,6 +38,12 @@ _UNSET = object()
 # ---------------------------------------------------------------------------
 # 공통 helper
 # ---------------------------------------------------------------------------
+def _ensure_whole_order_quantity(qty: Decimal) -> Decimal:
+    """주문/잔여마감 수량은 실무 기준 정수만 허용한다."""
+    if qty != qty.to_integral_value():
+        raise OrderError("수량은 소수점 없이 정수로 입력해주세요.")
+    return qty
+
 def _to_positive_quantity(value) -> Decimal:
     try:
         qty = value if isinstance(value, Decimal) else Decimal(str(value))
@@ -45,7 +51,7 @@ def _to_positive_quantity(value) -> Decimal:
         raise OrderError("수량이 올바른 숫자가 아닙니다.")
     if qty <= 0:
         raise OrderError("수량은 0보다 커야 합니다.")
-    return qty
+    return _ensure_whole_order_quantity(qty)
 
 
 def generate_internal_order_no(order_date=None, *, site_prefix="") -> str:

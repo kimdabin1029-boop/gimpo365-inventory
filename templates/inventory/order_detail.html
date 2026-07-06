@@ -77,7 +77,7 @@
   <form method="post" action="{% url 'inventory:order_item_stock_in' oi.pk %}" class="inbound-form">
     {% csrf_token %}
     <label>입고수량
-      <input type="number" name="quantity_input" value="{{ oi.remaining_qty|plain }}" min="0.001" step="0.001" max="{{ oi.remaining_qty|plain }}" required>
+      <input type="number" name="quantity_input" value="{{ oi.remaining_qty|plain }}" min="1" step="1" max="{{ oi.remaining_qty|plain }}" required>
     </label>
     <label>입고일자
       <input type="date" name="occurred_at" value="{{ today|date:'Y-m-d' }}" required>
