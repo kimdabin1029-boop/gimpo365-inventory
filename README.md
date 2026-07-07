@@ -1,11 +1,14 @@
 # gimpo365-inventory
 
-김포365한의원 내부 재고관리 시스템 **v0.1** (개발자용 입구 문서).
+김포365한의원 내부 운영 시스템 `김포365OS`의 첫 번째 모듈인 재고관리 시스템입니다.
 
-김포365OS의 첫 번째 독립 모듈로, 소모품·의료용품·미용소모품·위생용품·의약품·일반소모품의
-재고를 표준화된 방식으로 관리한다.
+이 저장소의 주 범위는 `Inventory Module`입니다.  
+입고, 출고, 초기재고, 실사조정, 주문, 부분입고, 거래이력, 재고현황, 관리자 리포트, 기준정보 점검을 다룹니다.
+
+현재 재고관리 MVP는 실무 투입 가능한 수준까지 구현되었으며, 이후 김포365OS 본체 개발에서는 이 저장소를 `Module 1: Inventory`의 기준 구현으로 참고합니다.
 
 ## 문서 지도
+별도 `OS_` 접두사가 없는 문서는 기본적으로 `Inventory Module` 기준 문서입니다.
 
 | 문서 | 대상 | 용도 |
 |---|---|---|
@@ -113,7 +116,7 @@ $env:PGPASSWORD="postgres"
 
 - 테스트 DB(`test_gimpo365_inventory`)는 러너가 자동 생성/삭제한다.
 - 가드 테스트 `core.tests.DatabaseEngineTest` 가 테스트 DB 가 PostgreSQL 인지 검증한다.
-- 현재 자동 테스트: **147건** (모델/제약·selector·service·permission·form·view·admin).
+- 현재 자동 테스트: **403건** (모델/제약·selector·service·permission·form·view·admin).
 
 > SQLite 로는 테스트하지 않는다. `settings.DATABASES` 의 ENGINE 은 PostgreSQL 로 고정되어 있다.
 
