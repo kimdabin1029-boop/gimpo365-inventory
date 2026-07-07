@@ -1,4 +1,5 @@
 # gimpo365-inventory 로드맵
+> 문서 범위: 김포365OS Module 1 — Inventory
 
 문서 상태: 방향성 정리. 구조 분리 원칙은 [ARCHITECTURE.md](ARCHITECTURE.md) 참고.
 

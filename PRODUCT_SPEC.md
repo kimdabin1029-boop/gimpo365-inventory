@@ -1,4 +1,5 @@
 # gimpo365-inventory v0.1 PRODUCT_SPEC
+> 문서 범위: 김포365OS Module 1 — Inventory
 
 ## 0. 문서 목적
 

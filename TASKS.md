@@ -1,4 +1,5 @@
 # gimpo365-inventory v0.1 TASKS.md v1.2
+> 문서 범위: 김포365OS Module 1 — Inventory
 
 문서 상태: 구현 지시용 2차 보완본  
 대상: Codex / Claude Code 작업 지시용  

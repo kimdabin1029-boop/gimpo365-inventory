@@ -1,4 +1,5 @@
 # gimpo365-inventory v0.1 TECH_SPEC 확정본
+> 문서 범위: 김포365OS Module 1 — Inventory
 
 문서 상태: v0.1 구현 기준 확정본  
 작성 목적: Codex / Claude Code 구현 기준 단일 문서  
